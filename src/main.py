@@ -34,7 +34,7 @@ def spawn_classifier(seed, dataset_name, X_train, y_train):
         time_left_for_this_task=60,  # sec., how long should this seed fit
         # process run
         per_run_time_limit=15,  # sec., each model may only take this long before it's killed
-        ml_memory_limit=1024,  # MB, memory limit imposed on each call to a ML algorithm
+        ml_memory_limit=4096,  # MB, memory limit imposed on each call to a ML algorithm
         shared_mode=True,  # tmp folder will be shared between seeds
         tmp_folder=TMP_FOLDER,
         output_folder=OUT_FOLER,
@@ -56,10 +56,10 @@ X, y = sklearn.datasets.load_digits(return_X_y=True)
 print('Starting to build the initial classifier!')
 automl = AutoSklearnClassifier(time_left_for_this_task=60,
                                per_run_time_limit=15,
-                               ml_memory_limit=1024,
+                               ml_memory_limit=4096,
                                shared_mode=True,
-                               ensemble_size=50,
-                               ensemble_nbest=200,
+                               ensemble_size=10,
+                               ensemble_nbest=50,
                                tmp_folder=TMP_FOLDER,
                                output_folder=OUT_FOLER,
                                initial_configurations_via_metalearning=0,
@@ -83,12 +83,12 @@ while i < len(X):
         print("Warning at " + str(i))
     if drift_status:
         print("Drift at " + str(i))
-        automl = AutoSklearnClassifier(time_left_for_this_task=30,
+        automl = AutoSklearnClassifier(time_left_for_this_task=60,
                                per_run_time_limit=15,
-                               ml_memory_limit=1024,
+                               ml_memory_limit=4096,
                                shared_mode=True,
-                               ensemble_size=50,
-                               ensemble_nbest=200,
+                               ensemble_size=10,
+                               ensemble_nbest=50,
                                tmp_folder=TMP_FOLDER,
                                output_folder=OUT_FOLER,
                                initial_configurations_via_metalearning=25,
