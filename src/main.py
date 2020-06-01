@@ -82,7 +82,7 @@ print('Starting to build the initial classifier!')
 
 processes = []
 for i in range(4):  # set this at roughly half of your cores
-    p = multiprocessing.Process(target=spawn_classifier, args=(i, X[0:BATCH_SIZE-1], y[0:BATCH_SIZE-1]))
+    p = multiprocessing.Process(target=spawn_classifier, args=(i, X, y))
     p.start()
     processes.append(p)
 for p in processes:
