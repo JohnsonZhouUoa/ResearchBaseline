@@ -18,6 +18,7 @@ for i in range(TEST_DATA_SIZE):
         print("Warning at " + str(i))
     if drift_status:
         print("Drift at " + str(i))
+        fhddm.reset()
 
 
 

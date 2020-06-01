@@ -6,8 +6,12 @@ from autosklearn.classification import AutoSklearnClassifier
 from autosklearn.constants import *
 from autosklearn.metrics import accuracy
 from skmultiflow.drift_detection import DDM
+from skmultiflow.data import ConceptDriftStream
+from skmultiflow.data import HyperplaneGenerator
+from skmultiflow.data import DataStream
 
 # GLobal variable
+SAMPLE_SIZE = 5000
 BATCH_SIZE = 10
 TMP_FOLDER = "/tmp/autosklearn_parallel_example_tmp"
 OUT_FOLER = "/tmp/autosklearn_parallel_example_out"
@@ -54,8 +58,25 @@ for dir in [TMP_FOLDER, OUT_FOLER]:
     except OSError as e:
         print(e)
 
-X, y = sklearn.datasets.load_digits(return_X_y=True)
+stream = HyperplaneGenerator(n_features=2)
+stream.prepare_for_use()
 
+X_t, y_t = stream.next_sample(SAMPLE_SIZE)
+
+stream1 = DataStream(X_t, y_t, name="test1")
+stream2 = DataStream(X_t, y_t, name="test2")
+stream1.prepare_for_use()
+stream2.prepare_for_use()
+
+
+drift_stream = ConceptDriftStream(
+    stream=stream1,
+    drift_stream=stream2
+)
+
+drift_stream.prepare_for_use()
+
+X, y = drift_stream.next_sample(BATCH_SIZE)
 
 print('Starting to build the initial classifier!')
 
@@ -77,8 +98,9 @@ automl = AutoSklearnClassifier(time_left_for_this_task=60,
                                initial_configurations_via_metalearning=0,
                                seed=1)
 
-#automl.fit(X[0:BATCH_SIZE-1], y[0:BATCH_SIZE-1])
-automl.fit_ensemble(y[0:BATCH_SIZE-1],
+#TODO: open issues 856 and 868 on github
+#automl.fit(X, y)
+automl.fit_ensemble(y,
                     task=MULTICLASS_CLASSIFICATION,
                     metric=accuracy,
                     precision='32',
@@ -88,46 +110,38 @@ automl.fit_ensemble(y[0:BATCH_SIZE-1],
 print("The initial model is: ")
 print(automl.show_models())
 
-i = BATCH_SIZE
-fhddm = FHDDM(BATCH_SIZE)
-#ddm = DDM()
-while i < len(X):
-    if (i + 2 * BATCH_SIZE) > len(X):
-        break
-    X_next = X[i + BATCH_SIZE:i + 2 * BATCH_SIZE]
-    y_next = y[i + BATCH_SIZE:i + 2 * BATCH_SIZE]
+
+#fhddm = FHDDM()
+ddm = DDM()
+while drift_stream.has_more_samples():
+    X_next, y_next = drift_stream.next_sample(BATCH_SIZE)
     y_predict = automl.predict(X_next)
-    corr = []
     if len(y_next) != len(y_predict):
         print("Predictions length not correct")
         break
     for j in range(len(y_next)):
-        if y_next[j ] == y_predict[j]:
-            corr.append(1)
-        else:
-            corr.append(0)
-    #ddm.add_element(y_next)
-    #ddm.add_element(y_predict)
-    # TODO: the detector is not working as expected at the moment
-    warning_status, drift_status = fhddm.detect(corr)
-    if warning_status:
-    #if ddm.detected_warning_zone():
-        print("Warning at " + str(i))
-    if drift_status:
-    #if ddm.detected_change():
-        print("Drift at " + str(i))
-        automl = AutoSklearnClassifier(time_left_for_this_task=60,
-                               per_run_time_limit=15,
-                               ml_memory_limit=4096,
-                               shared_mode=True,
-                               ensemble_size=10,
-                               ensemble_nbest=50,
-                               tmp_folder=TMP_FOLDER,
-                               output_folder=OUT_FOLER,
-                               initial_configurations_via_metalearning=0,
-                               seed=1)
-        automl.fit(X_next, y_next)
-        fhddm.reset()
-        # ddm.reset()
-    i = i + BATCH_SIZE
-    print("An iteration finished, the next i is: " + str(i))
+        ddm.add_element(y_next[j] == y_predict[j])
+        if ddm.detected_warning_zone():
+            print('Warning zone has been detected in data: ' + str(y_next[j]) + ' - of index: ' + str(j))
+        if ddm.detected_change():
+            print('Change has been detected in data: ' + str(y_next[j]) + ' - of index: ' + str(j))
+            automl = AutoSklearnClassifier(time_left_for_this_task=60,
+                                           per_run_time_limit=15,
+                                           ml_memory_limit=4096,
+                                           shared_mode=True,
+                                           ensemble_size=10,
+                                           ensemble_nbest=50,
+                                           tmp_folder=TMP_FOLDER,
+                                           output_folder=OUT_FOLER,
+                                           initial_configurations_via_metalearning=0,
+                                           seed=1)
+            automl.fit(X_next, y_next)
+    # warning_status, drift_status = fhddm.detect(corr)
+    # if warning_status:
+    # #if ddm.detected_warning_zone():
+    #     print("Warning at " + str(i))
+    # if drift_status:
+    # #if ddm.detected_change():
+    #     print("Drift at " + str(i))
+        # fhddm.reset()
+    print("Accuracy Score: ", sklearn.metrics.accuracy_score(y_next, y_predict))
