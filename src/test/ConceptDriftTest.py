@@ -3,6 +3,8 @@ from skmultiflow.data import HyperplaneGenerator
 from skmultiflow.data import DataStream
 import shutil
 from autosklearn.classification import AutoSklearnClassifier
+from sklearn import metrics
+from skmultiflow.evaluation import EvaluatePrequential
 
 
 BATCH_SIZE = 100
@@ -19,7 +21,7 @@ for dir in [TMP_FOLDER, OUT_FOLER]:
 stream = HyperplaneGenerator(n_features=2)
 stream.prepare_for_use()
 
-X, y = stream.next_sample(BATCH_SIZE)
+X, y = stream.next_sample(10000)
 
 stream1 = DataStream(X, y, name="test1")
 stream2 = DataStream(X, y, name="test2")
@@ -40,15 +42,16 @@ automl = AutoSklearnClassifier(time_left_for_this_task=60,
                                per_run_time_limit=15,
                                ml_memory_limit=1024,
                                shared_mode=True,
-                               ensemble_size=0,
+                               ensemble_size=2,
                                tmp_folder=TMP_FOLDER,
                                output_folder=OUT_FOLER,
                                initial_configurations_via_metalearning=0,
                                seed=1)
 
-#TODO: open issues 856 and 868 on github
 automl.fit(X, y)
 
+X, y = drift_stream.next_sample(BATCH_SIZE)
 
-
+yhat = automl.predict(X)
+print("Accuracy score:", metrics.accuracy_score(y, yhat))
 
