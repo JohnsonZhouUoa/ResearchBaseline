@@ -8,6 +8,8 @@ ddm = DDM()
 
 TEST_DATA_SIZE = 10000
 DRIFT_START = 5000
+actual_d = 0
+detected_d = 0
 
 # Simulating a data stream
 # data_stream = np.random.randint(2, size=TEST_DATA_SIZE)
@@ -19,8 +21,8 @@ data_stream = np.array([x * 2 + 1 for x in range(1, TEST_DATA_SIZE+1)])
 
 for i in range(50, TEST_DATA_SIZE):
     if i % 50 == 0:
-        for j in range(i, i+20):
-            data_stream[j] = j * 4 + 2
+        actual_d += 1
+        data_stream[i] = i * 4 + 2
 
 regr = linear_model.LinearRegression()
 
@@ -34,4 +36,7 @@ for i in range(21, len(data_stream)):
     if ddm.detected_warning_zone():
         print('Warning zone has been detected in data: ' + str(data_stream[i]) + ' - of index: ' + str(i))
     if ddm.detected_change():
+        detected_d += 1
         print('Change has been detected in data: ' + str(data_stream[i]) + ' - of index: ' + str(i))
+
+print("Detected drifts " + str(detected_d) + " out of " + str(actual_d) + " actual drifts")
