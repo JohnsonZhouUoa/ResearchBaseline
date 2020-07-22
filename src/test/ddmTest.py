@@ -11,18 +11,13 @@ DRIFT_START = 5000
 actual_d = 0
 detected_d = 0
 
-# Simulating a data stream
-# data_stream = np.random.randint(2, size=TEST_DATA_SIZE)
-# Add a concept drift at index 5000
-# for i in range(DRIFT_START, TEST_DATA_SIZE):
-#     data_stream[i] = np.random.randint(5, 10)
-
 data_stream = np.array([x * 2 + 1 for x in range(1, TEST_DATA_SIZE+1)])
 
 for i in range(50, TEST_DATA_SIZE):
     if i % 50 == 0:
         actual_d += 1
-        data_stream[i] = i * 4 + 2
+        for j in range(i, i + 10):
+            data_stream[j] = j * 5 + 5
 
 regr = linear_model.LinearRegression()
 

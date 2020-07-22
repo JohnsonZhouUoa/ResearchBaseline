@@ -8,9 +8,9 @@ import numpy as np
 
 
 # Global variable
-DEFAULT_PR = 0.5
+DEFAULT_PR = 0
 SAMPLE_SIZE = 10000
-GLOBAL_RATE = 0.1
+GLOBAL_RATE = 1
 
 
 def nCk(n, k):
@@ -18,6 +18,8 @@ def nCk(n, k):
 
 
 def calculate_pr(ove, spe, n=1, x=1):
+    if ove == 1:
+        return DEFAULT_PR
     if spe == 0:
         return DEFAULT_PR
     else:
@@ -28,7 +30,7 @@ y_train = np.array([x * 2 + 1 for x in range(1, SAMPLE_SIZE+1)])
 
 for i in range(50, SAMPLE_SIZE):
     if i % 50 == 0:
-        for j in range(i, i+20):
+        for j in range(i, i+10):
             y_train[j] = j * 4 + 2
 
 regr = linear_model.LinearRegression()
@@ -61,10 +63,10 @@ for i in range(21, SAMPLE_SIZE):
 
     ddm.add_element(math.floor(y_next) != math.floor(y_predict), pr)
     if ddm.detected_warning_zone():
-        print('Warning zone has been detected in data: ' + str(y_next))
+        print('Warning zone has been detected in data: ' + str(y_next) + ' - of index: ' + str(i))
         warning += 1
     if ddm.detected_change():
         d_global += 1
         n_local = 0
-        print('Change has been detected in data: ' + str(y_next))
+        print('Change has been detected in data: ' + str(y_next) + ' - of index: ' + str(i))
     #print("Accuracy Score: ", sklearn.metrics.accuracy_score(y_next, y_predict))

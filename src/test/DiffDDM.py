@@ -123,7 +123,7 @@ class DiffDDM(BaseDriftDetector):
             self.reset()
 
         # self.miss_prob = self.miss_prob + (prediction - self.miss_prob) / float(self.sample_count)
-        self.miss_prob = pr + (prediction - pr) / float(self.sample_count)
+        self.miss_prob = pr + 2*prediction / float(self.sample_count)
         self.miss_std = np.sqrt(self.miss_prob * (1 - self.miss_prob) / float(self.sample_count))
         self.sample_count += 1
 
