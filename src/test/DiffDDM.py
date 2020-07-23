@@ -122,8 +122,7 @@ class DiffDDM(BaseDriftDetector):
         if self.in_concept_change:
             self.reset()
 
-        # self.miss_prob = self.miss_prob + (prediction - self.miss_prob) / float(self.sample_count)
-        self.miss_prob = pr + 2*prediction / float(self.sample_count)
+        self.miss_prob = self.miss_prob + (prediction - self.miss_prob) / float(self.sample_count)
         self.miss_std = np.sqrt(self.miss_prob * (1 - self.miss_prob) / float(self.sample_count))
         self.sample_count += 1
 
@@ -139,6 +138,12 @@ class DiffDDM(BaseDriftDetector):
             self.miss_prob_min = self.miss_prob
             self.miss_sd_min = self.miss_std
             self.miss_prob_sd_min = self.miss_prob + self.miss_std
+
+        std = np.sqrt(pr * (1 - pr) / float(self.sample_count))
+        if pr + std <= self.miss_prob_sd_min:
+            self.miss_prob_min = pr
+            self.miss_sd_min = std
+            self.miss_prob_sd_min = pr + std
 
         if self.miss_prob + self.miss_std > self.miss_prob_min + self.out_control_level * self.miss_sd_min:
             self.in_concept_change = True

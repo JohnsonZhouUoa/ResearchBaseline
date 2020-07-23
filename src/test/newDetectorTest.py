@@ -10,7 +10,7 @@ import numpy as np
 # Global variable
 DEFAULT_PR = 0
 SAMPLE_SIZE = 10000
-GLOBAL_RATE = 1
+GLOBAL_RATE = 0.5
 
 
 def nCk(n, k):
