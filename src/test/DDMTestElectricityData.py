@@ -10,6 +10,7 @@ from skmultiflow.data import DataStream
 from sklearn.tree import DecisionTreeClassifier
 
 
+
 # Global variable
 DEFAULT_PR = 0
 SAMPLE_SIZE = 10000

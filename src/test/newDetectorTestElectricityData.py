@@ -11,9 +11,8 @@ from sklearn.tree import DecisionTreeClassifier
 
 
 # Global variable
-DEFAULT_PR = 0
-SAMPLE_SIZE = 10000
-GLOBAL_RATE = 1
+DEFAULT_PR = 1
+GLOBAL_RATE = 0
 
 
 def nCk(n, k):
@@ -63,15 +62,15 @@ while elec_stream.has_more_samples():
     pr_global = calculate_pr(n_global, d_global)
     pr_local = calculate_pr(n_local, 1)
 
-    pr = GLOBAL_RATE * pr_global + pr_local
+    pr = GLOBAL_RATE * pr_global + (1 - GLOBAL_RATE) * pr_local
 
     ddm.add_element(y_test != y_predict, pr)
     if ddm.detected_warning_zone():
-        print('Warning zone has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
+        #print('Warning zone has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
         warning += 1
     if ddm.detected_change():
         d_global += 1
         n_local = 0
-        print('Change has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
+        #print('Change has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
 print("Number of warning detected: " + str(warning))
 print("Number of drifts detected: " + str(d_global))
