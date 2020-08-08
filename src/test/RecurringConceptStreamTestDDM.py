@@ -72,6 +72,7 @@ n_global = 0 # Cumulative Number of observations
 n_local = 0 # Number of observations
 d_global = 0 # Number of detected drifts
 warning = 0
+dist = 0
 
 ddm = DDM()
 while datastream.has_more_samples():
@@ -89,6 +90,7 @@ while datastream.has_more_samples():
         d_global += 1
         n_local = 0
         #clf.fit(X_test, y_test)
-        #print('Change has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
-print("Number of warning detected: " + str(warning))
+        dist += n_global % 500
+        print('Change has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
+print("Average distance to detect drifts: " + str(dist / d_global))
 print("Number of drifts detected: " + str(d_global))

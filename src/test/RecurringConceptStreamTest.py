@@ -13,7 +13,8 @@ from skika.data.reccurring_concept_stream import RCStreamType, RecurringConceptS
 
 # Global variable
 DEFAULT_PR = 0.5
-GLOBAL_RATE = 0.5
+GLOBAL_RATE = 0.8
+INITAL_TRAINING = 100
 
 
 def nCk(n, k):
@@ -30,7 +31,7 @@ def calculate_pr(ove, spe, n=1, x=1):
 
 
 def sigmoid_transformation(pr):
-    return math.exp(pr)/(0.5+math.exp(pr))
+    return math.exp(pr)/(GLOBAL_RATE+math.exp(pr))
 
 
 num_samples = 15000
@@ -61,7 +62,7 @@ datastream = RecurringConceptStream(
                         boost_first_occurance = False)
 
 
-X_train, y_train = datastream.next_sample(100)
+X_train, y_train = datastream.next_sample(INITAL_TRAINING)
 
 clf = DecisionTreeClassifier()
 
@@ -69,10 +70,11 @@ clf.fit(X_train, y_train)
 
 pr_global = DEFAULT_PR # Probability with cumulative samples
 pr_local = DEFAULT_PR # Probability with samples within drifts
-n_global = 0 # Cumulative Number of observations
+n_global = INITAL_TRAINING # Cumulative Number of observations
 n_local = 0 # Number of observations
 d_global = 0 # Number of detected drifts
 warning = 0
+dist = 0
 
 ddm = DiffDDM()
 while datastream.has_more_samples():
@@ -95,6 +97,7 @@ while datastream.has_more_samples():
         d_global += 1
         n_local = 0
         #clf.fit(X_test, y_test)
-        #print('Change has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
-print("Number of warning detected: " + str(warning))
+        dist += n_global % 500
+        print('Change has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
+print("Average distance to detect drifts: " + str(dist / d_global))
 print("Number of drifts detected: " + str(d_global))
