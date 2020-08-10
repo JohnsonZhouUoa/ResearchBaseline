@@ -29,7 +29,6 @@ def calculate_pr(ove, spe, n=1, x=1):
     else:
         return nCk(spe, x) * nCk(ove-spe, n-x) / nCk(ove, n)
 
-
 elec_data = arff.loadarff('../data/repository/elec.arff')
 
 elec_df = pd.DataFrame(elec_data[0])
@@ -52,6 +51,7 @@ n_global = 0 # Cumulative Number of observations
 n_local = 0 # Number of observations
 d_global = 0 # Number of detected drifts
 warning = 0
+dist = 0
 
 ddm = DDM()
 while elec_stream.has_more_samples():

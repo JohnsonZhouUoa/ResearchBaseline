@@ -10,9 +10,9 @@ from skmultiflow.data import DataStream
 from sklearn.tree import DecisionTreeClassifier
 
 
-# Global variable
-DEFAULT_PR = 1
+DEFAULT_PR = 0.5
 GLOBAL_RATE = 0
+INITAL_TRAINING = 100
 
 
 def nCk(n, k):
@@ -28,6 +28,10 @@ def calculate_pr(ove, spe, n=1, x=1):
         return nCk(spe, x) * nCk(ove-spe, n-x) / nCk(ove, n)
 
 
+def sigmoid_transformation(pr):
+    return math.exp(pr)/(GLOBAL_RATE+math.exp(pr))
+
+
 elec_data = arff.loadarff('../data/repository/elec.arff')
 
 elec_df = pd.DataFrame(elec_data[0])
@@ -38,7 +42,7 @@ elec_df.replace(mapping, inplace=True)
 elec_stream = DataStream(elec_df, name="elec")
 elec_stream.prepare_for_use()
 
-X_train, y_train = elec_stream.next_sample(100)
+X_train, y_train = elec_stream.next_sample(INITAL_TRAINING)
 
 clf = DecisionTreeClassifier()
 
@@ -46,10 +50,11 @@ clf.fit(X_train, y_train)
 
 pr_global = DEFAULT_PR # Probability with cumulative samples
 pr_local = DEFAULT_PR # Probability with samples within drifts
-n_global = 0 # Cumulative Number of observations
+n_global = INITAL_TRAINING # Cumulative Number of observations
 n_local = 0 # Number of observations
 d_global = 0 # Number of detected drifts
 warning = 0
+dist = 0
 
 ddm = DiffDDM()
 while elec_stream.has_more_samples():
@@ -64,7 +69,7 @@ while elec_stream.has_more_samples():
 
     pr = GLOBAL_RATE * pr_global + (1 - GLOBAL_RATE) * pr_local
 
-    ddm.add_element(y_test != y_predict, pr)
+    ddm.add_element(y_test != y_predict, sigmoid_transformation(pr))
     if ddm.detected_warning_zone():
         #print('Warning zone has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
         warning += 1

@@ -13,7 +13,7 @@ from skika.data.reccurring_concept_stream import RCStreamType, RecurringConceptS
 
 # Global variable
 DEFAULT_PR = 0.5
-GLOBAL_RATE = 0.8
+GLOBAL_RATE = 0.5
 INITAL_TRAINING = 100
 
 
@@ -31,7 +31,12 @@ def calculate_pr(ove, spe, n=1, x=1):
 
 
 def sigmoid_transformation(pr):
+    print("Global_Rate is " + str(GLOBAL_RATE))
     return math.exp(pr)/(GLOBAL_RATE+math.exp(pr))
+
+
+def gaussian_transformation(x):
+    return math.log(1+x)
 
 
 num_samples = 15000
@@ -80,6 +85,8 @@ ddm = DiffDDM()
 while datastream.has_more_samples():
     n_global += 1
     n_local += 1
+
+    GLOBAL_RATE = gaussian_transformation(d_global / n_local)
 
     X_test, y_test = datastream.next_sample()
     y_predict = clf.predict(X_test)
