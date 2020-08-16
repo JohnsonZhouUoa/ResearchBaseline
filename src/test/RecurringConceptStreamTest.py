@@ -3,17 +3,16 @@ from fractions import Fraction
 from functools import reduce
 import math
 from src.test.DiffDDM import DiffDDM
-import numpy as np
-from scipy.io import arff
-import pandas as pd
-from skmultiflow.data import DataStream
 from sklearn.tree import DecisionTreeClassifier
 from skika.data.reccurring_concept_stream import RCStreamType, RecurringConceptStream, conceptOccurence
+import matplotlib.pyplot as plt
 
+
+plt.style.use("seaborn-whitegrid")
 
 # Global variable
 DEFAULT_PR = 0.5
-GLOBAL_RATE = 0.5
+GLOBAL_RATE = 1
 INITAL_TRAINING = 100
 
 
@@ -31,7 +30,7 @@ def calculate_pr(ove, spe, n=1, x=1):
 
 
 def sigmoid_transformation(pr):
-    print("Global_Rate is " + str(GLOBAL_RATE))
+    #return 1/(1+math.exp(-pr))
     return math.exp(pr)/(GLOBAL_RATE+math.exp(pr))
 
 
@@ -39,11 +38,11 @@ def gaussian_transformation(x):
     return math.log(1+x)
 
 
-num_samples = 15000
+num_samples = 1500000
 concept_chain = {0:0}
 concept = 0
 for i in range(1,num_samples):
-    if i % 500 == 0:
+    if i % 50000 == 0:
         if concept == 0:
             concept_chain[i] = 1
             concept = 1
@@ -80,13 +79,14 @@ n_local = 0 # Number of observations
 d_global = 0 # Number of detected drifts
 warning = 0
 dist = 0
+pr_hist = []
 
 ddm = DiffDDM()
 while datastream.has_more_samples():
     n_global += 1
     n_local += 1
 
-    GLOBAL_RATE = gaussian_transformation(d_global / n_local)
+    #GLOBAL_RATE = gaussian_transformation(d_global / n_local)
 
     X_test, y_test = datastream.next_sample()
     y_predict = clf.predict(X_test)
@@ -94,17 +94,21 @@ while datastream.has_more_samples():
     pr_global = calculate_pr(n_global, d_global)
     pr_local = calculate_pr(n_local, 1)
 
-    pr = GLOBAL_RATE * pr_global + (1 - GLOBAL_RATE) * pr_local
+    pr = sigmoid_transformation(GLOBAL_RATE * pr_global + (1 - GLOBAL_RATE) * pr_local)
 
-    ddm.add_element(y_test != y_predict, sigmoid_transformation(pr))
+    pr_hist.append(pr)
+    ddm.add_element(y_test != y_predict, pr)
     if ddm.detected_warning_zone():
         #print('Warning zone has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
         warning += 1
     if ddm.detected_change():
         d_global += 1
         n_local = 0
-        #clf.fit(X_test, y_test)
-        dist += n_global % 500
+        clf.fit(X_test, y_test)
+        dist += n_global % 50000
         print('Change has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
 print("Average distance to detect drifts: " + str(dist / d_global))
 print("Number of drifts detected: " + str(d_global))
+plt.plot(pr_hist)
+plt.show()
+

@@ -32,11 +32,11 @@ def calculate_pr(ove, spe, n=1, x=1):
 def sigmoid_transformation(pr):
     return
 
-num_samples = 15000
+num_samples = 1500000
 concept_chain = {0:0}
 concept = 0
 for i in range(1,num_samples):
-    if i % 500 == 0:
+    if i % 50000 == 0:
         if concept == 0:
             concept_chain[i] = 1
             concept = 1
@@ -89,8 +89,8 @@ while datastream.has_more_samples():
     if ddm.detected_change():
         d_global += 1
         n_local = 0
-        #clf.fit(X_test, y_test)
-        dist += n_global % 500
+        clf.fit(X_test, y_test)
+        dist += n_global % 50000
         print('Change has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
 print("Average distance to detect drifts: " + str(dist / d_global))
 print("Number of drifts detected: " + str(d_global))
