@@ -1,10 +1,11 @@
 from operator import mul
 from fractions import Fraction
 from functools import reduce
-from skmultiflow.drift_detection import DDM
+from skmultiflow.drift_detection import ADWIN
 from sklearn.tree import DecisionTreeClassifier
 from skika.data.reccurring_concept_stream import RCStreamType, RecurringConceptStream, conceptOccurence
 import time
+import numpy as np
 
 start_time = time.time()
 
@@ -73,7 +74,7 @@ warning = 0
 TP = []
 FP = []
 
-ddm = DDM()
+adwin = ADWIN()
 while datastream.has_more_samples():
     n_global += 1
     n_local += 1
@@ -81,11 +82,11 @@ while datastream.has_more_samples():
     X_test, y_test = datastream.next_sample()
     y_predict = clf.predict(X_test)
 
-    ddm.add_element(y_test != y_predict)
-    if ddm.detected_warning_zone():
+    adwin.add_element(float(y_test != y_predict))
+    if adwin.detected_warning_zone():
         #print('Warning zone has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
         warning += 1
-    if ddm.detected_change():
+    if adwin.detected_change():
         d_global += 1
         n_local = 0
         clf.fit(X_test, y_test)

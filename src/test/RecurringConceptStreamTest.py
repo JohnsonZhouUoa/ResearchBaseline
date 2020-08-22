@@ -10,7 +10,10 @@ from statsmodels.tsa.holtwinters import ExponentialSmoothing
 import pandas as pd
 import numpy as np
 import warnings
+import time
 
+
+start_time = time.time()
 
 warnings.filterwarnings('ignore')
 plt.style.use("seaborn-whitegrid")
@@ -19,7 +22,9 @@ plt.style.use("seaborn-whitegrid")
 DEFAULT_PR = 0.5
 GLOBAL_RATE = 0
 INITAL_TRAINING = 100
-PREDICT_SIZE = 1000
+PREDICT_SIZE = 10000
+STREAM_SIZE = 1500000
+DRIFT_INTERVAL = 5000
 
 
 def nCk(n, k):
@@ -44,11 +49,10 @@ def gaussian_transformation(x):
     return math.log(1+x)
 
 
-num_samples = 15000
 concept_chain = {0:0}
 concept = 0
-for i in range(1,num_samples):
-    if i % 500 == 0:
+for i in range(1,STREAM_SIZE):
+    if i % DRIFT_INTERVAL == 0:
         if concept == 0:
             concept_chain[i] = 1
             concept = 1
@@ -64,7 +68,7 @@ desc = {0: concept_0, 1: concept_1}
 
 datastream = RecurringConceptStream(
                         rctype = RCStreamType.STAGGER,
-                        num_samples =num_samples,
+                        num_samples =STREAM_SIZE,
                         noise = 0,
                         concept_chain = concept_chain,
                         seed = 42,
@@ -88,11 +92,12 @@ n_global = INITAL_TRAINING # Cumulative Number of observations
 n_local = 0 # Number of observations
 d_global = 0 # Number of detected drifts
 warning = 0
-dist = 0
 #pr_hist = []
 ts = []
 re_predict = False
 pred_results = []
+TP = []
+FP = []
 
 ddm = DiffDDM()
 while datastream.has_more_samples():
@@ -105,10 +110,12 @@ while datastream.has_more_samples():
         df = pd.DataFrame({'time': time, 'ts': ts})
         df.set_index('time', inplace=True)
         hw_model = ExponentialSmoothing(df, trend='add', seasonal='add').fit(optimized=True)
-        pred = hw_model.predict(len(ts), len(ts) + PREDICT_SIZE)
-        pred_res = np.argwhere(np.array(pred) > 1)
+        pred = np.array(hw_model.predict(len(ts), len(ts) + PREDICT_SIZE))
+        pred_res = np.argwhere(pred > 1)
         if(len(pred_res) != 0):
             pred_results.append(pred_res[0])
+        else:
+            pred_results.append(0.01)
         re_predict = False
 
     if d_global > 0:
@@ -134,15 +141,22 @@ while datastream.has_more_samples():
         d_global += 1
         n_local = 0
         clf.fit(X_test, y_test)
-        dist += n_global % 50000
         ts.append(1)
         re_predict = True
         GLOBAL_RATE = 0
+        if(n_global // DRIFT_INTERVAL in TP):
+            FP.append(n_global // DRIFT_INTERVAL)
+        else:
+            TP.append(n_global // DRIFT_INTERVAL)
         print('Change has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
     else:
         ts.append(0)
-print("Average distance to detect drifts: " + str(dist / d_global))
 print("Number of drifts detected: " + str(d_global))
+print("TP:" + str(len(TP)))
+print("FP:" + str(len(FP)))
+print("Actual:" + str(STREAM_SIZE/DRIFT_INTERVAL))
 #plt.plot(pr_hist)
 #plt.show()
+
+print("--- %s seconds ---" % (time.time() - start_time))
 
