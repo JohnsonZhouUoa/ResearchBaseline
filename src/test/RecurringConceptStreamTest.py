@@ -6,14 +6,20 @@ from src.test.DiffDDM import DiffDDM
 from sklearn.tree import DecisionTreeClassifier
 from skika.data.reccurring_concept_stream import RCStreamType, RecurringConceptStream, conceptOccurence
 import matplotlib.pyplot as plt
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+import pandas as pd
+import numpy as np
+import warnings
 
 
+warnings.filterwarnings('ignore')
 plt.style.use("seaborn-whitegrid")
 
 # Global variable
 DEFAULT_PR = 0.5
-GLOBAL_RATE = 1
+GLOBAL_RATE = 0
 INITAL_TRAINING = 100
+PREDICT_SIZE = 1000
 
 
 def nCk(n, k):
@@ -38,11 +44,11 @@ def gaussian_transformation(x):
     return math.log(1+x)
 
 
-num_samples = 1500000
+num_samples = 15000
 concept_chain = {0:0}
 concept = 0
 for i in range(1,num_samples):
-    if i % 50000 == 0:
+    if i % 500 == 0:
         if concept == 0:
             concept_chain[i] = 1
             concept = 1
@@ -72,6 +78,10 @@ clf = DecisionTreeClassifier()
 
 clf.fit(X_train, y_train)
 
+
+
+
+
 pr_global = DEFAULT_PR # Probability with cumulative samples
 pr_local = DEFAULT_PR # Probability with samples within drifts
 n_global = INITAL_TRAINING # Cumulative Number of observations
@@ -79,14 +89,33 @@ n_local = 0 # Number of observations
 d_global = 0 # Number of detected drifts
 warning = 0
 dist = 0
-pr_hist = []
+#pr_hist = []
+ts = []
+re_predict = False
+pred_results = []
 
 ddm = DiffDDM()
 while datastream.has_more_samples():
     n_global += 1
     n_local += 1
 
-    #GLOBAL_RATE = gaussian_transformation(d_global / n_local)
+    if(re_predict):
+        time = pd.date_range('2000-01-01', periods=len(ts),
+                           freq='H')
+        df = pd.DataFrame({'time': time, 'ts': ts})
+        df.set_index('time', inplace=True)
+        hw_model = ExponentialSmoothing(df, trend='add', seasonal='add').fit(optimized=True)
+        pred = hw_model.predict(len(ts), len(ts) + PREDICT_SIZE)
+        pred_res = np.argwhere(np.array(pred) > 1)
+        if(len(pred_res) != 0):
+            pred_results.append(pred_res[0])
+        re_predict = False
+
+    if d_global > 0:
+        pred_next = pred_results[d_global-1]
+        radio = n_local / pred_next
+        if (radio < 1):
+            GLOBAL_RATE = radio
 
     X_test, y_test = datastream.next_sample()
     y_predict = clf.predict(X_test)
@@ -96,7 +125,7 @@ while datastream.has_more_samples():
 
     pr = sigmoid_transformation(GLOBAL_RATE * pr_global + (1 - GLOBAL_RATE) * pr_local)
 
-    pr_hist.append(pr)
+    #pr_hist.append(pr)
     ddm.add_element(y_test != y_predict, pr)
     if ddm.detected_warning_zone():
         #print('Warning zone has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
@@ -106,9 +135,14 @@ while datastream.has_more_samples():
         n_local = 0
         clf.fit(X_test, y_test)
         dist += n_global % 50000
+        ts.append(1)
+        re_predict = True
+        GLOBAL_RATE = 0
         print('Change has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
+    else:
+        ts.append(0)
 print("Average distance to detect drifts: " + str(dist / d_global))
 print("Number of drifts detected: " + str(d_global))
-plt.plot(pr_hist)
-plt.show()
+#plt.plot(pr_hist)
+#plt.show()
 
