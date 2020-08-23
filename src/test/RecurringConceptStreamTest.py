@@ -23,8 +23,8 @@ DEFAULT_PR = 0.5
 GLOBAL_RATE = 0
 INITAL_TRAINING = 100
 PREDICT_SIZE = 10000
-STREAM_SIZE = 1500000
-DRIFT_INTERVAL = 5000
+STREAM_SIZE = 15000
+DRIFT_INTERVAL = 100
 
 
 def nCk(n, k):
@@ -41,7 +41,6 @@ def calculate_pr(ove, spe, n=1, x=1):
 
 
 def sigmoid_transformation(pr):
-    #return 1/(1+math.exp(-pr))
     return math.exp(pr)/(GLOBAL_RATE+math.exp(pr))
 
 
@@ -105,10 +104,10 @@ while datastream.has_more_samples():
     n_local += 1
 
     if(re_predict):
-        time = pd.date_range('2000-01-01', periods=len(ts),
+        timestamp = pd.date_range('2000-01-01', periods=len(ts),
                            freq='H')
-        df = pd.DataFrame({'time': time, 'ts': ts})
-        df.set_index('time', inplace=True)
+        df = pd.DataFrame({'timestamp': timestamp, 'ts': ts})
+        df.set_index('timestamp', inplace=True)
         hw_model = ExponentialSmoothing(df, trend='add', seasonal='add').fit(optimized=True)
         pred = np.array(hw_model.predict(len(ts), len(ts) + PREDICT_SIZE))
         pred_res = np.argwhere(pred > 1)

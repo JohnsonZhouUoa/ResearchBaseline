@@ -11,8 +11,8 @@ start_time = time.time()
 # Global variable
 DEFAULT_PR = 1
 GLOBAL_RATE = 0
-STREAM_SIZE = 1500000
-DRIFT_INTERVAL = 5000
+STREAM_SIZE = 15000
+DRIFT_INTERVAL = 100
 
 
 def nCk(n, k):
