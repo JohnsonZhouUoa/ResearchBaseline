@@ -119,9 +119,9 @@ while datastream.has_more_samples():
 
     if d_global > 0:
         pred_next = pred_results[d_global-1]
-        radio = n_local / pred_next
-        if (radio < 1):
-            GLOBAL_RATE = radio
+        ratio = n_local / pred_next
+        if (ratio < 1):
+            GLOBAL_RATE = ratio
 
     X_test, y_test = datastream.next_sample()
     y_predict = clf.predict(X_test)
