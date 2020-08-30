@@ -75,7 +75,7 @@ class MineDDM(BaseDriftDetector):
 
 
         if self.drift_count > 0:
-            ratio = self.sample_count / self.predict_result
+            ratio = self.global_sample_count / self.predict_result
             if (ratio < 1):
                 self.global_ratio = ratio
 
@@ -120,7 +120,6 @@ class MineDDM(BaseDriftDetector):
             return self.default_prob
         else:
             return self.nCk(spe, x) * self.nCk(ove - spe, n - x) / self.nCk(ove, n)
-
 
     def sigmoid_transformation(self, pr):
         return math.exp(pr) / (self.global_prob + math.exp(pr))

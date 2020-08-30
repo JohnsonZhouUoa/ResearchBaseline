@@ -1,13 +1,17 @@
 from src.detector.MineDDM import MineDDM
+from skmultiflow.drift_detection import ADWIN
+from skmultiflow.drift_detection import PageHinkley
+from skmultiflow.drift_detection import DDM
 from sklearn.tree import DecisionTreeClassifier
 from skika.data.reccurring_concept_stream import RCStreamType, RecurringConceptStream, conceptOccurence
 import matplotlib.pyplot as plt
 import warnings
 import time
 import numpy as np
+import random
+import collections
 
 
-start_time = time.time()
 
 warnings.filterwarnings('ignore')
 plt.style.use("seaborn-whitegrid")
@@ -16,34 +20,44 @@ plt.style.use("seaborn-whitegrid")
 DEFAULT_PR = 0.5
 GLOBAL_RATE = 0
 INITAL_TRAINING = 100
-STREAM_SIZE = 15000
-DRIFT_INTERVAL = 100
+STREAM_SIZE = 100000
+DRIFT_ONE_INTERVAL = 500
+DRIFT_TWO_INTERVAL = 3000
+concepts = [1, 2]
 total_D = []
 total_TP = []
 total_FP = []
 total_RT = []
+ACTUAL_DRIFT = 50
 
 for i in range(0, 10):
-
+    start_time = time.time()
+    # drift_points = np.array(sorted(random.sample(range(STREAM_SIZE), ACTUAL_DRIFT)))
     concept_chain = {0:0}
-    concept = 0
+    current_concept = 0
     for i in range(1,STREAM_SIZE):
-        if i % DRIFT_INTERVAL == 0:
-            if concept == 0:
+        # if i in drift_points:
+        if i % DRIFT_ONE_INTERVAL == 0 or i % DRIFT_TWO_INTERVAL == 0:
+            if current_concept == 0:
                 concept_chain[i] = 1
-                concept = 1
+                current_concept = 1
             else:
                 concept_chain[i] = 0
-                concept = 0
+                current_concept = 0
+
+
+    x = collections.Counter(concept_chain.values())
 
     concept_0 = conceptOccurence(id = 0, difficulty = 2, noise = 0,
-                            appearences = 2, examples_per_appearence = 5000)
+                            appearences = x[0], examples_per_appearence = DRIFT_ONE_INTERVAL)
     concept_1 = conceptOccurence(id = 1, difficulty = 3, noise = 0,
-                        appearences = 1, examples_per_appearence = 5000)
+                        appearences = x[1], examples_per_appearence = DRIFT_TWO_INTERVAL)
+    # concept_2 = conceptOccurence(id=2, difficulty=2, noise=0,
+    #                              appearences=x[2], examples_per_appearence=DRIFT_INTERVAL)
     desc = {0: concept_0, 1: concept_1}
 
     datastream = RecurringConceptStream(
-                        rctype = RCStreamType.STAGGER,
+                        rctype = RCStreamType.AGRAWAL,
                         num_samples =STREAM_SIZE,
                         noise = 0,
                         concept_chain = concept_chain,
@@ -72,16 +86,25 @@ for i in range(0, 10):
         y_predict = clf.predict(X_test)
 
         ddm.add_element(y_test != y_predict)
+        # ddm.add_element(float(y_test != y_predict))
         if ddm.detected_warning_zone():
             #print('Warning zone has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
             warning += 1
         if ddm.detected_change():
             d_global += 1
             clf.fit(X_test, y_test)
-            if(n_global // DRIFT_INTERVAL in TP):
-                FP.append(n_global // DRIFT_INTERVAL)
+            # drift_point = drift_points.flat[np.abs(drift_points - n_global).argmin()]
+            # if(drift_point in TP):
+            #     FP.append(drift_point)
+            # else:
+            #     TP.append(drift_point)
+            if (n_global // DRIFT_TWO_INTERVAL in TP):
+                if (n_global // DRIFT_ONE_INTERVAL in TP):
+                    FP.append(n_global // DRIFT_ONE_INTERVAL)
+                else:
+                    TP.append(n_global // DRIFT_ONE_INTERVAL)
             else:
-                TP.append(n_global // DRIFT_INTERVAL)
+                TP.append(n_global // DRIFT_TWO_INTERVAL)
             #print('Change has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
     print("Number of drifts detected: " + str(d_global))
     total_D.append(d_global)
@@ -89,7 +112,7 @@ for i in range(0, 10):
     total_TP.append(len(TP))
     print("FP:" + str(len(FP)))
     total_FP.append(len(FP))
-    print("Actual:" + str(STREAM_SIZE/DRIFT_INTERVAL))
+    print("Actual:" + str(len(concept_chain)))
 
     print("--- %s seconds ---" % (time.time() - start_time))
     total_RT.append(time.time() - start_time)

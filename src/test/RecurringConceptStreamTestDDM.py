@@ -7,7 +7,7 @@ import time
 import numpy as np
 
 
-start_time = time.time()
+
 
 warnings.filterwarnings('ignore')
 plt.style.use("seaborn-whitegrid")
@@ -24,6 +24,7 @@ total_FP = []
 total_RT = []
 
 for i in range(0, 10):
+    start_time = time.time()
 
     concept_chain = {0:0}
     concept = 0
