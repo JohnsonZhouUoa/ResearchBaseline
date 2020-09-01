@@ -21,40 +21,39 @@ DEFAULT_PR = 0.5
 GLOBAL_RATE = 0
 INITAL_TRAINING = 100
 STREAM_SIZE = 100000
-DRIFT_ONE_INTERVAL = 500
-DRIFT_TWO_INTERVAL = 3000
+DRIFT_INTERVALS = [500, 3000]
 concepts = [1, 2]
 total_D = []
 total_TP = []
 total_FP = []
 total_RT = []
-ACTUAL_DRIFT = 50
+actuals = []
 
 for i in range(0, 10):
-    start_time = time.time()
-    # drift_points = np.array(sorted(random.sample(range(STREAM_SIZE), ACTUAL_DRIFT)))
+
     concept_chain = {0:0}
     current_concept = 0
     for i in range(1,STREAM_SIZE):
         # if i in drift_points:
-        if i % DRIFT_ONE_INTERVAL == 0 or i % DRIFT_TWO_INTERVAL == 0:
-            if current_concept == 0:
-                concept_chain[i] = 1
-                current_concept = 1
-            else:
-                concept_chain[i] = 0
-                current_concept = 0
-
+        for j in DRIFT_INTERVALS:
+            if i % j == 0:
+                if i not in concept_chain.keys():
+                    actuals.append(i)
+                    concept = concepts[random.randint(0, len(concepts)-1)]
+                    concept_chain[i] = concept
+                    concepts.remove(concept)
+                    concepts.append(current_concept)
+                    current_concept = concept
 
     x = collections.Counter(concept_chain.values())
 
     concept_0 = conceptOccurence(id = 0, difficulty = 2, noise = 0,
-                            appearences = x[0], examples_per_appearence = DRIFT_ONE_INTERVAL)
+                            appearences = x[0], examples_per_appearence = max(DRIFT_INTERVALS))
     concept_1 = conceptOccurence(id = 1, difficulty = 3, noise = 0,
-                        appearences = x[1], examples_per_appearence = DRIFT_TWO_INTERVAL)
-    # concept_2 = conceptOccurence(id=2, difficulty=2, noise=0,
-    #                              appearences=x[2], examples_per_appearence=DRIFT_INTERVAL)
-    desc = {0: concept_0, 1: concept_1}
+                        appearences = x[1], examples_per_appearence = max(DRIFT_INTERVALS))
+    concept_2 = conceptOccurence(id=2, difficulty=2, noise=0,
+                                 appearences=x[2], examples_per_appearence=max(DRIFT_INTERVALS))
+    desc = {0: concept_0, 1: concept_1, 2:concept_2}
 
     datastream = RecurringConceptStream(
                         rctype = RCStreamType.AGRAWAL,
@@ -77,7 +76,10 @@ for i in range(0, 10):
     TP = []
     FP = []
 
-    ddm = MineDDM()
+    mineDDM = MineDDM()
+    ddm = DDM()
+    ph = PageHinkley()
+    adwin = ADWIN()
     while datastream.has_more_samples():
         n_global += 1
         n_local += 1
@@ -85,7 +87,9 @@ for i in range(0, 10):
         X_test, y_test = datastream.next_sample()
         y_predict = clf.predict(X_test)
 
+        start_time = time.time()
         ddm.add_element(y_test != y_predict)
+        running_time = time.time() - start_time
         # ddm.add_element(float(y_test != y_predict))
         if ddm.detected_warning_zone():
             #print('Warning zone has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
@@ -93,19 +97,12 @@ for i in range(0, 10):
         if ddm.detected_change():
             d_global += 1
             clf.fit(X_test, y_test)
-            # drift_point = drift_points.flat[np.abs(drift_points - n_global).argmin()]
-            # if(drift_point in TP):
-            #     FP.append(drift_point)
-            # else:
-            #     TP.append(drift_point)
-            if (n_global // DRIFT_TWO_INTERVAL in TP):
-                if (n_global // DRIFT_ONE_INTERVAL in TP):
-                    FP.append(n_global // DRIFT_ONE_INTERVAL)
-                else:
-                    TP.append(n_global // DRIFT_ONE_INTERVAL)
+            drift_point = min(actuals, key=lambda x:abs(x-n_global))
+            if(drift_point in TP):
+                FP.append(drift_point)
             else:
-                TP.append(n_global // DRIFT_TWO_INTERVAL)
-            #print('Change has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
+                TP.append(drift_point)
+
     print("Number of drifts detected: " + str(d_global))
     total_D.append(d_global)
     print("TP:" + str(len(TP)))
@@ -114,8 +111,8 @@ for i in range(0, 10):
     total_FP.append(len(FP))
     print("Actual:" + str(len(concept_chain)))
 
-    print("--- %s seconds ---" % (time.time() - start_time))
-    total_RT.append(time.time() - start_time)
+    print("--- %s seconds ---" % (running_time))
+    total_RT.append(running_time)
 
 print("Average Drift Detected: ", str(np.mean(total_D)))
 print("Minimum Drift Detected: ", str(np.min(total_D)))
