@@ -21,15 +21,28 @@ DEFAULT_PR = 0.5
 GLOBAL_RATE = 0
 INITAL_TRAINING = 100
 STREAM_SIZE = 100000
-DRIFT_INTERVALS = [500, 3000]
-concepts = [1, 2]
-total_D = []
-total_TP = []
-total_FP = []
-total_RT = []
-actuals = []
+DRIFT_INTERVALS = [800, 3000]
+concepts = [0, 1, 2]
+total_D_mine = []
+total_TP_mine = []
+total_FP_mine = []
+total_RT_mine = []
+total_D_ddm = []
+total_TP_ddm = []
+total_FP_ddm = []
+total_RT_ddm = []
+total_D_ph = []
+total_TP_ph = []
+total_FP_ph = []
+total_RT_ph = []
+total_D_adwin = []
+total_TP_adwin = []
+total_FP_adwin = []
+total_RT_adwin = []
+actuals = [0]
+RANDOMNESS = 25
 
-for i in range(0, 10):
+for k in range(0, 10):
 
     concept_chain = {0:0}
     current_concept = 0
@@ -37,15 +50,19 @@ for i in range(0, 10):
         # if i in drift_points:
         for j in DRIFT_INTERVALS:
             if i % j == 0:
-                if i not in concept_chain.keys():
-                    actuals.append(i)
-                    concept = concepts[random.randint(0, len(concepts)-1)]
-                    concept_chain[i] = concept
-                    concepts.remove(concept)
-                    concepts.append(current_concept)
+                randomness = random.randint(0, RANDOMNESS)
+                d = i + ((randomness * 1) if (random.randint(0, 1) > 0) else (randomness * -1))
+                if d not in concept_chain.keys():
+                    concept_index = random.randint(0, len(concepts)-1)
+                    while concepts[concept_index] == current_concept:
+                        concept_index = random.randint(0, len(concepts) - 1)
+                    concept = concepts[concept_index]
+                    concept_chain[d] = concept
+                    actuals.append(d)
                     current_concept = concept
 
     x = collections.Counter(concept_chain.values())
+    print(x)
 
     concept_0 = conceptOccurence(id = 0, difficulty = 2, noise = 0,
                             appearences = x[0], examples_per_appearence = max(DRIFT_INTERVALS))
@@ -70,11 +87,22 @@ for i in range(0, 10):
     clf.fit(X_train, y_train)
 
     n_global = INITAL_TRAINING # Cumulative Number of observations
-    n_local = 0 # Number of observations
-    d_global = 0 # Number of detected drifts
-    warning = 0
-    TP = []
-    FP = []
+    d_mine = 0
+    d_ddm = 0
+    d_ph = 0
+    d_adwin = 0
+    w_mine= 0
+    w_ddm = 0
+    w_ph = 0
+    w_adwin = 0
+    TP_mine = []
+    TP_ddm = []
+    TP_ph = []
+    TP_adwin = []
+    FP_mine = []
+    FP_ddm = []
+    FP_ph = []
+    FP_adwin = []
 
     mineDDM = MineDDM()
     ddm = DDM()
@@ -82,55 +110,195 @@ for i in range(0, 10):
     adwin = ADWIN()
     while datastream.has_more_samples():
         n_global += 1
-        n_local += 1
 
         X_test, y_test = datastream.next_sample()
         y_predict = clf.predict(X_test)
 
-        start_time = time.time()
+        mine_start_time = time.time()
+        mineDDM.add_element(y_test != y_predict)
+        mine_running_time = time.time() - mine_start_time
+        if mineDDM.detected_warning_zone():
+            #print('Warning zone has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
+            w_mine += 1
+        if mineDDM.detected_change():
+            d_mine += 1
+            drift_point = max([i for i in actuals if i <= n_global])
+            if(drift_point == 0 or drift_point in TP_mine):
+                FP_mine.append(drift_point)
+            else:
+                TP_mine.append(drift_point)
+
+        ddm_start_time = time.time()
         ddm.add_element(y_test != y_predict)
-        running_time = time.time() - start_time
-        # ddm.add_element(float(y_test != y_predict))
+        ddm_running_time = time.time() - ddm_start_time
         if ddm.detected_warning_zone():
             #print('Warning zone has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
-            warning += 1
+            w_ddm += 1
         if ddm.detected_change():
-            d_global += 1
-            clf.fit(X_test, y_test)
-            drift_point = min(actuals, key=lambda x:abs(x-n_global))
-            if(drift_point in TP):
-                FP.append(drift_point)
+            d_ddm += 1
+            drift_point = max([i for i in actuals if i <= n_global])
+            if(drift_point == 0 or drift_point in TP_ddm):
+                FP_ddm.append(drift_point)
             else:
-                TP.append(drift_point)
+                TP_ddm.append(drift_point)
 
-    print("Number of drifts detected: " + str(d_global))
-    total_D.append(d_global)
-    print("TP:" + str(len(TP)))
-    total_TP.append(len(TP))
-    print("FP:" + str(len(FP)))
-    total_FP.append(len(FP))
-    print("Actual:" + str(len(concept_chain)))
+        ph_start_time = time.time()
+        ph.add_element(y_test != y_predict)
+        ph_running_time = time.time() - ph_start_time
+        if ph.detected_warning_zone():
+            #print('Warning zone has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
+            w_ph += 1
+        if ph.detected_change():
+            d_ph += 1
+            drift_point = max([i for i in actuals if i <= n_global])
+            if(drift_point == 0 or drift_point in TP_ph):
+                FP_ph.append(drift_point)
+            else:
+                TP_ph.append(drift_point)
 
-    print("--- %s seconds ---" % (running_time))
-    total_RT.append(running_time)
+        adwin_start_time = time.time()
+        adwin.add_element(float(y_test != y_predict))
+        adwin_running_time = time.time() - adwin_start_time
+        if adwin.detected_warning_zone():
+            #print('Warning zone has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
+            w_adwin += 1
+        if adwin.detected_change():
+            d_adwin += 1
+            drift_point = max([i for i in actuals if i <= n_global])
+            if(drift_point == 0 or drift_point in TP_adwin):
+                FP_adwin.append(drift_point)
+            else:
+                TP_adwin.append(drift_point)
+        if ([d_ddm, d_mine, d_adwin, d])
+            clf.fit(X_test, y_test)
 
-print("Average Drift Detected: ", str(np.mean(total_D)))
-print("Minimum Drift Detected: ", str(np.min(total_D)))
-print("Maximum Drift Detected: ", str(np.max(total_D)))
-print("Drift Detected Standard Deviation: ", str(np.std(total_D)))
+    print("Round " + str(k+1) + " out of 10 rounds")
+    print("Actual drifts:" + str(len(actuals)))
 
+    print("Number of drifts detected by mine: " + str(d_mine))
+    total_D_mine.append(d_mine)
+    print("TP by mine:" + str(len(TP_mine)))
+    total_TP_mine.append(len(TP_mine))
+    print("FP by mine:" + str(len(FP_mine)))
+    total_FP_mine.append(len(FP_mine))
+    print("--- %s seconds ---" % (mine_running_time))
+    total_RT_mine.append(mine_running_time)
 
-print("Average TP: ", str(np.mean(total_TP)))
-print("Minimum TP: ", str(np.min(total_TP)))
-print("Maximum TP: ", str(np.max(total_TP)))
-print("TP Standard Deviation: ", str(np.std(total_TP)))
+    print("Number of drifts detected by ddm: " + str(d_ddm))
+    total_D_ddm.append(d_ddm)
+    print("TP by ddm:" + str(len(TP_ddm)))
+    total_TP_ddm.append(len(TP_ddm))
+    print("FP by ddm:" + str(len(FP_ddm)))
+    total_FP_ddm.append(len(FP_ddm))
+    print("--- %s seconds ---" % (ddm_running_time))
+    total_RT_ddm.append(ddm_running_time)
 
-print("Average FP: ", str(np.mean(total_FP)))
-print("Minimum FP: ", str(np.min(total_FP)))
-print("Maximum FP: ", str(np.max(total_FP)))
-print("FP Standard Deviation: ", str(np.std(total_FP)))
+    print("Number of drifts detected by page-hinkley: " + str(d_ph))
+    total_D_ph.append(d_ph)
+    print("TP by page-hinkley:" + str(len(TP_ph)))
+    total_TP_ph.append(len(TP_ph))
+    print("FP by page-hinkley:" + str(len(FP_ph)))
+    total_FP_ph.append(len(FP_ph))
+    print("--- %s seconds ---" % (ph_running_time))
+    total_RT_ph.append(ph_running_time)
 
-print("Average RT: ", str(np.mean(total_RT)))
-print("Minimum RT: ", str(np.min(total_RT)))
-print("Maximum RT: ", str(np.max(total_RT)))
-print("RT Standard Deviation: ", str(np.std(total_RT)))
+    print("Number of drifts detected by adwin: " + str(d_adwin))
+    total_D_adwin.append(d_adwin)
+    print("TP by adwin:" + str(len(TP_adwin)))
+    total_TP_adwin.append(len(TP_adwin))
+    print("FP by adwin:" + str(len(FP_adwin)))
+    total_FP_adwin.append(len(FP_adwin))
+    print("--- %s seconds ---" % (adwin_running_time))
+    total_RT_adwin.append(adwin_running_time)
+
+print("Overall result:")
+print("Stream size: " + str(STREAM_SIZE))
+print("Drift intervals: " + str(DRIFT_INTERVALS))
+
+print("Overall result for mine:")
+
+print("Average Drift Detected: ", str(np.mean(total_D_mine)))
+print("Minimum Drift Detected: ", str(np.min(total_D_mine)))
+print("Maximum Drift Detected: ", str(np.max(total_D_mine)))
+print("Drift Detected Standard Deviation: ", str(np.std(total_D_mine)))
+
+print("Average TP: ", str(np.mean(total_TP_mine)))
+print("Minimum TP: ", str(np.min(total_TP_mine)))
+print("Maximum TP: ", str(np.max(total_TP_mine)))
+print("TP Standard Deviation: ", str(np.std(total_TP_mine)))
+
+print("Average FP: ", str(np.mean(total_FP_mine)))
+print("Minimum FP: ", str(np.min(total_FP_mine)))
+print("Maximum FP: ", str(np.max(total_FP_mine)))
+print("FP Standard Deviation: ", str(np.std(total_FP_mine)))
+
+print("Average RT: ", str(np.mean(total_RT_mine)))
+print("Minimum RT: ", str(np.min(total_RT_mine)))
+print("Maximum RT: ", str(np.max(total_RT_mine)))
+print("RT Standard Deviation: ", str(np.std(total_RT_mine)))
+
+print("Overall result for ddm:")
+
+print("Average Drift Detected: ", str(np.mean(total_D_ddm)))
+print("Minimum Drift Detected: ", str(np.min(total_D_ddm)))
+print("Maximum Drift Detected: ", str(np.max(total_D_ddm)))
+print("Drift Detected Standard Deviation: ", str(np.std(total_D_ddm)))
+
+print("Average TP: ", str(np.mean(total_TP_ddm)))
+print("Minimum TP: ", str(np.min(total_TP_ddm)))
+print("Maximum TP: ", str(np.max(total_TP_ddm)))
+print("TP Standard Deviation: ", str(np.std(total_TP_ddm)))
+
+print("Average FP: ", str(np.mean(total_FP_ddm)))
+print("Minimum FP: ", str(np.min(total_FP_ddm)))
+print("Maximum FP: ", str(np.max(total_FP_ddm)))
+print("FP Standard Deviation: ", str(np.std(total_FP_ddm)))
+
+print("Average RT: ", str(np.mean(total_RT_ddm)))
+print("Minimum RT: ", str(np.min(total_RT_ddm)))
+print("Maximum RT: ", str(np.max(total_RT_ddm)))
+print("RT Standard Deviation: ", str(np.std(total_RT_ddm)))
+
+print("Overall result for page-hinkley:")
+
+print("Average Drift Detected: ", str(np.mean(total_D_ph)))
+print("Minimum Drift Detected: ", str(np.min(total_D_ph)))
+print("Maximum Drift Detected: ", str(np.max(total_D_ph)))
+print("Drift Detected Standard Deviation: ", str(np.std(total_D_ph)))
+
+print("Average TP: ", str(np.mean(total_TP_ph)))
+print("Minimum TP: ", str(np.min(total_TP_ph)))
+print("Maximum TP: ", str(np.max(total_TP_ph)))
+print("TP Standard Deviation: ", str(np.std(total_TP_ph)))
+
+print("Average FP: ", str(np.mean(total_FP_ph)))
+print("Minimum FP: ", str(np.min(total_FP_ph)))
+print("Maximum FP: ", str(np.max(total_FP_ph)))
+print("FP Standard Deviation: ", str(np.std(total_FP_ph)))
+
+print("Average RT: ", str(np.mean(total_RT_ph)))
+print("Minimum RT: ", str(np.min(total_RT_ph)))
+print("Maximum RT: ", str(np.max(total_RT_ph)))
+print("RT Standard Deviation: ", str(np.std(total_RT_ph)))
+
+print("Overall result for adwin:")
+
+print("Average Drift Detected: ", str(np.mean(total_D_adwin)))
+print("Minimum Drift Detected: ", str(np.min(total_D_adwin)))
+print("Maximum Drift Detected: ", str(np.max(total_D_adwin)))
+print("Drift Detected Standard Deviation: ", str(np.std(total_D_adwin)))
+
+print("Average TP: ", str(np.mean(total_TP_adwin)))
+print("Minimum TP: ", str(np.min(total_TP_adwin)))
+print("Maximum TP: ", str(np.max(total_TP_adwin)))
+print("TP Standard Deviation: ", str(np.std(total_TP_adwin)))
+
+print("Average FP: ", str(np.mean(total_FP_adwin)))
+print("Minimum FP: ", str(np.min(total_FP_adwin)))
+print("Maximum FP: ", str(np.max(total_FP_adwin)))
+print("FP Standard Deviation: ", str(np.std(total_FP_adwin)))
+
+print("Average RT: ", str(np.mean(total_RT_adwin)))
+print("Minimum RT: ", str(np.min(total_RT_adwin)))
+print("Maximum RT: ", str(np.max(total_RT_adwin)))
+print("RT Standard Deviation: ", str(np.std(total_RT_adwin)))
