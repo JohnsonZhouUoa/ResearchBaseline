@@ -81,8 +81,9 @@ class MineDDM(BaseDriftDetector):
 
         self.global_prob = self.calculate_pr(self.global_sample_count, self.drift_count)
         self.local_prob = self.calculate_pr(self.sample_count, 1)
-
         pr = self.sigmoid_transformation(self.global_ratio * self.global_prob + (1 - self.global_ratio) * self.local_prob)
+
+        std = np.sqrt(pr * (1 - pr) / float(self.sample_count))
 
         if self.sample_count < self.min_instances:
             return
@@ -92,7 +93,6 @@ class MineDDM(BaseDriftDetector):
             self.miss_sd_min = self.miss_std
             self.miss_prob_sd_min = self.miss_prob + self.miss_std
 
-        std = np.sqrt(pr * (1 - pr) / float(self.sample_count))
         if pr + std <= self.miss_prob_sd_min:
             self.miss_prob_min = pr
             self.miss_sd_min = std
@@ -100,6 +100,7 @@ class MineDDM(BaseDriftDetector):
 
         if self.miss_prob + self.miss_std > self.miss_prob_min + self.out_control_level * self.miss_sd_min:
             self.in_concept_change = True
+            self.drift_count += 1
             self.drift_ts.append(self.global_sample_count)
 
         elif self.miss_prob + self.miss_std > self.miss_prob_min + self.warning_level * self.miss_sd_min:
@@ -122,4 +123,5 @@ class MineDDM(BaseDriftDetector):
             return self.nCk(spe, x) * self.nCk(ove - spe, n - x) / self.nCk(ove, n)
 
     def sigmoid_transformation(self, pr):
-        return math.exp(pr) / (self.global_prob + math.exp(pr))
+        #TODO
+        return 1-math.exp(-pr)

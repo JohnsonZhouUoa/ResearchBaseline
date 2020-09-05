@@ -17,11 +17,9 @@ warnings.filterwarnings('ignore')
 plt.style.use("seaborn-whitegrid")
 
 # Global variable
-DEFAULT_PR = 0.5
-GLOBAL_RATE = 0
 INITAL_TRAINING = 100
-STREAM_SIZE = 100000
-DRIFT_INTERVALS = [800, 3000]
+STREAM_SIZE = 150000
+DRIFT_INTERVALS = [500]
 concepts = [0, 1, 2]
 total_D_mine = []
 total_TP_mine = []
@@ -40,7 +38,7 @@ total_TP_adwin = []
 total_FP_adwin = []
 total_RT_adwin = []
 actuals = [0]
-RANDOMNESS = 25
+RANDOMNESS = 0
 
 for k in range(0, 10):
 
@@ -75,7 +73,7 @@ for k in range(0, 10):
     datastream = RecurringConceptStream(
                         rctype = RCStreamType.AGRAWAL,
                         num_samples =STREAM_SIZE,
-                        noise = 0,
+                        noise = 0.1,
                         concept_chain = concept_chain,
                         desc = desc,
                         boost_first_occurance = False)
@@ -127,6 +125,7 @@ for k in range(0, 10):
                 FP_mine.append(drift_point)
             else:
                 TP_mine.append(drift_point)
+            clf.fit(X_test, y_test)
 
         ddm_start_time = time.time()
         ddm.add_element(y_test != y_predict)
@@ -141,6 +140,7 @@ for k in range(0, 10):
                 FP_ddm.append(drift_point)
             else:
                 TP_ddm.append(drift_point)
+            clf.fit(X_test, y_test)
 
         ph_start_time = time.time()
         ph.add_element(y_test != y_predict)
@@ -155,6 +155,7 @@ for k in range(0, 10):
                 FP_ph.append(drift_point)
             else:
                 TP_ph.append(drift_point)
+            clf.fit(X_test, y_test)
 
         adwin_start_time = time.time()
         adwin.add_element(float(y_test != y_predict))
@@ -169,8 +170,9 @@ for k in range(0, 10):
                 FP_adwin.append(drift_point)
             else:
                 TP_adwin.append(drift_point)
-        if ([d_ddm, d_mine, d_adwin, d])
             clf.fit(X_test, y_test)
+        # if (max([d_ddm, d_mine, d_adwin, d_ph]) % 2 == 0):
+        #     clf.fit(X_test, y_test)
 
     print("Round " + str(k+1) + " out of 10 rounds")
     print("Actual drifts:" + str(len(actuals)))
