@@ -123,5 +123,4 @@ class MineDDM(BaseDriftDetector):
             return self.nCk(spe, x) * self.nCk(ove - spe, n - x) / self.nCk(ove, n)
 
     def sigmoid_transformation(self, pr):
-        #TODO
-        return 1-math.exp(-pr)
+        return math.sqrt(pr)/(0.01 + math.sqrt(pr))
