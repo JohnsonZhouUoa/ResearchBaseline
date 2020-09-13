@@ -6,11 +6,14 @@ from functools import reduce
 from skmultiflow.drift_detection.base_drift_detector import BaseDriftDetector
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 import pandas as pd
+from memory_profiler import profile
+
+#fp = open('memory_mine.log', 'w')
 
 class MineDDM(BaseDriftDetector):
 
     def __init__(self, min_num_instances=30, warning_level=2.0, out_control_level=3.0,
-                 default_prob=0.5, predict_size=100):
+                 default_prob=0.5):
         super().__init__()
         self.sample_count = 1
         self.global_sample_count = 1
@@ -27,9 +30,8 @@ class MineDDM(BaseDriftDetector):
         self.warning_level = warning_level
         self.out_control_level = out_control_level
         self.default_prob = default_prob
-        self.predict_size = predict_size
         self.learn_ts = False
-        self.predict_result = 0.01
+        self.predict_result = -1
         self.drift_ts = []
         self.reset()
 
@@ -48,7 +50,9 @@ class MineDDM(BaseDriftDetector):
         self.miss_prob_min = float("inf")
         self.miss_sd_min = float("inf")
         self.learn_ts = True
+        self.global_ratio = 0
 
+    #@profile(stream=fp)
     def add_element(self, prediction):
 
         if self.in_concept_change:
@@ -65,8 +69,8 @@ class MineDDM(BaseDriftDetector):
         self.delay = 0
 
         if (self.learn_ts):
-            if (len(self.drift_ts) > 10):
-                temp_df = pd.DataFrame({'timestamp': pd.date_range('2000-01-01', periods=len(self.drift_ts),freq='Q'), 'ts': self.drift_ts})
+            if (len(self.drift_ts) > 14):
+                temp_df = pd.DataFrame({'timestamp': pd.date_range('2000-01-01', periods=len(self.drift_ts),freq='D'), 'ts': self.drift_ts})
                 temp_df.set_index('timestamp', inplace=True)
                 hw_model = ExponentialSmoothing(temp_df, trend='add', seasonal='add').fit(optimized=True)
                 pred = np.array(hw_model.predict(len(self.drift_ts), len(self.drift_ts)))
@@ -74,10 +78,13 @@ class MineDDM(BaseDriftDetector):
                 self.learn_ts = False
 
 
-        if self.drift_count > 0:
-            ratio = self.global_sample_count / self.predict_result
-            if (ratio < 1):
-                self.global_ratio = ratio
+        if self.predict_result != -1:
+            if self.predict_result > self.global_sample_count:
+                diff = self.predict_result - self.global_sample_count
+                ratio = self.sample_count / diff
+                if (ratio < 1):
+                    self.global_ratio = ratio
+
 
         self.global_prob = self.calculate_pr(self.global_sample_count, self.drift_count)
         self.local_prob = self.calculate_pr(self.sample_count, 1)
@@ -93,12 +100,23 @@ class MineDDM(BaseDriftDetector):
             self.miss_sd_min = self.miss_std
             self.miss_prob_sd_min = self.miss_prob + self.miss_std
 
-        if pr + std <= self.miss_prob_sd_min:
-            self.miss_prob_min = pr
-            self.miss_sd_min = std
-            self.miss_prob_sd_min = pr + std
+        #from_pr = False
+        if(self.miss_prob < self.default_prob):
+            if pr + std <= self.miss_prob_sd_min:
+                # print("pr replacing")
+                # print(pr)
+                # print("Global ratio:")
+                # print(self.global_ratio)
+                #from_pr = True
+                self.miss_prob_min = pr
+                self.miss_sd_min = std
+                self.miss_prob_sd_min = pr + std
 
         if self.miss_prob + self.miss_std > self.miss_prob_min + self.out_control_level * self.miss_sd_min:
+            #if(from_pr):
+                #print("Drift from pr:")
+                #from_pr = False
+            #print(self.miss_prob_min)
             self.in_concept_change = True
             self.drift_count += 1
             self.drift_ts.append(self.global_sample_count)
@@ -123,4 +141,6 @@ class MineDDM(BaseDriftDetector):
             return self.nCk(spe, x) * self.nCk(ove - spe, n - x) / self.nCk(ove, n)
 
     def sigmoid_transformation(self, pr):
-        return math.sqrt(pr)/(0.01 + math.sqrt(pr))
+        #return math.sqrt(pr)/(0.01 + math.sqrt(pr))
+        return (math.exp(pr)/(1+self.global_ratio+math.exp(pr)))
+
