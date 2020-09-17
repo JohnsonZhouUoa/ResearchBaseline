@@ -102,6 +102,7 @@ class DiffDDM(BaseDriftDetector):
         self.miss_prob_min = float("inf")
         self.miss_sd_min = float("inf")
 
+
     def add_element(self, prediction, pr):
         """ Add a new element to the statistics
 

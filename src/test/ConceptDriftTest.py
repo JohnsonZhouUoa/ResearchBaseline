@@ -11,6 +11,7 @@ import numpy as np
 import random
 import collections
 import sys
+from skmultiflow.trees import HoeffdingTreeClassifier, HoeffdingAdaptiveTreeClassifier, ExtremelyFastDecisionTreeClassifier
 
 
 
@@ -18,9 +19,9 @@ warnings.filterwarnings('ignore')
 plt.style.use("seaborn-whitegrid")
 
 # Global variable
-INITAL_TRAINING = 1
-STREAM_SIZE = 150000
-DRIFT_INTERVALS = [500]
+TRAINING_SIZE = 200
+STREAM_SIZE = 500000
+DRIFT_INTERVALS = [5000]
 concepts = [0, 1, 2]
 total_D_mine = []
 total_TP_mine = []
@@ -45,7 +46,7 @@ total_DIST_adwin = []
 RANDOMNESS = 50
 
 
-for k in range(0, 10):
+for k in range(0, 5):
     actuals = [0]
     concept_chain = {0:0}
     current_concept = 0
@@ -65,7 +66,7 @@ for k in range(0, 10):
                     current_concept = concept
 
     x = collections.Counter(concept_chain.values())
-    print(x)
+    #print(x)
 
     concept_0 = conceptOccurence(id = 0, difficulty = 2, noise = 0,
                             appearences = x[0], examples_per_appearence = max(DRIFT_INTERVALS))
@@ -75,21 +76,30 @@ for k in range(0, 10):
                                  appearences=x[2], examples_per_appearence=max(DRIFT_INTERVALS))
     desc = {0: concept_0, 1: concept_1, 2:concept_2}
 
-    datastream = RecurringConceptGradualStream(
-                        rctype = RCStreamType.STAGGER,
-                        num_samples =STREAM_SIZE,
-                        noise = 0.1,
-                        concept_chain = concept_chain,
-                        desc = desc,
-                        boost_first_occurance = False)
+    datastream = RecurringConceptStream(
+        rctype=RCStreamType.AGRAWAL,
+        num_samples=STREAM_SIZE,
+        noise=0,
+        concept_chain=concept_chain,
+        desc=desc,
+        boost_first_occurance=False)
 
-    X_train, y_train = datastream.next_sample(INITAL_TRAINING)
+    #X_train, y_train = datastream.next_sample(TRAINING_SIZE)
+    X_train = []
+    y_train = []
+    for i in range(TRAINING_SIZE):
+        X, y = datastream.next_sample()
+        X_train.append(X[0])
+        y_train.append(y[0])
 
-    clf = DecisionTreeClassifier()
+    X_train = np.array(X_train)
+    y_train = np.array(y_train)
 
-    clf.fit(X_train, y_train)
+    ht = HoeffdingAdaptiveTreeClassifier()
 
-    n_global = INITAL_TRAINING # Cumulative Number of observations
+    ht.partial_fit(X_train, y_train)
+
+    n_global = TRAINING_SIZE # Cumulative Number of observations
     d_mine = 0
     d_ddm = 0
     d_ph = 0
@@ -114,6 +124,8 @@ for k in range(0, 10):
     DIST_ddm = [0]
     DIST_ph = [0]
     DIST_adwin = [0]
+    last = -1
+    retrain = False
 
     mineDDM = MineDDM()
     ddm = DDM()
@@ -123,14 +135,13 @@ for k in range(0, 10):
         n_global += 1
 
         X_test, y_test = datastream.next_sample()
-        y_predict = clf.predict(X_test)
+        y_predict = ht.predict(X_test)
 
         mine_start_time = time.time()
         mineDDM.add_element(y_test != y_predict)
         mine_running_time = time.time() - mine_start_time
         RT_mine.append(mine_running_time)
         if mineDDM.detected_warning_zone():
-            #print('Warning zone has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
             w_mine += 1
         if mineDDM.detected_change():
             d_mine += 1
@@ -140,14 +151,12 @@ for k in range(0, 10):
             else:
                 DIST_mine.append(abs(n_global - drift_point))
                 TP_mine.append(drift_point)
-            #clf.fit(X_test, y_test)
 
         ddm_start_time = time.time()
         ddm.add_element(y_test != y_predict)
         ddm_running_time = time.time() - ddm_start_time
         RT_ddm.append(ddm_running_time)
         if ddm.detected_warning_zone():
-            #print('Warning zone has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
             w_ddm += 1
         if ddm.detected_change():
             d_ddm += 1
@@ -157,14 +166,12 @@ for k in range(0, 10):
             else:
                 DIST_ddm.append(abs(n_global - drift_point))
                 TP_ddm.append(drift_point)
-            #clf.fit(X_test, y_test)
 
         ph_start_time = time.time()
         ph.add_element(y_test != y_predict)
         ph_running_time = time.time() - ph_start_time
         RT_ph.append(ph_running_time)
         if ph.detected_warning_zone():
-            #print('Warning zone has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
             w_ph += 1
         if ph.detected_change():
             d_ph += 1
@@ -174,14 +181,12 @@ for k in range(0, 10):
             else:
                 DIST_ph.append(abs(n_global - drift_point))
                 TP_ph.append(drift_point)
-            #clf.fit(X_test, y_test)
 
         adwin_start_time = time.time()
         adwin.add_element(float(y_test != y_predict))
         adwin_running_time = time.time() - adwin_start_time
         RT_adwin.append(adwin_running_time)
         if adwin.detected_warning_zone():
-            #print('Warning zone has been detected at n: ' + str(n_global) + ' - of x: ' + str(X_test))
             w_adwin += 1
         if adwin.detected_change():
             d_adwin += 1
@@ -191,9 +196,22 @@ for k in range(0, 10):
             else:
                 DIST_adwin.append(abs(n_global - drift_point))
                 TP_adwin.append(drift_point)
-            clf.fit(X_test, y_test)
-        if (n_global in actuals):
-            clf.fit(X_test, y_test)
+        # if (n_global in actuals):
+        #     last = n_global
+        #     #print("Last drift point: "+str(last))
+        #     #print("Start re-training")
+        #     # X_train = []
+        #     # y_train = []
+        #     retrain = True
+        #
+        # if retrain and n_global - last <= TRAINING_SIZE:
+        #     #print("Re-training")
+        #     # X_train.append(X_test[0])
+        #     # y_train.append(y_test[0])
+        #     ht.partial_fit(X_test, y_test)
+        # else:
+        #     retrain = False
+        ht.partial_fit(X_test, y_test)
 
     print("Round " + str(k+1) + " out of 10 rounds")
     print("Actual drifts:" + str(len(actuals)))

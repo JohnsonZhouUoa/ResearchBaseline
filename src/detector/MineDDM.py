@@ -54,7 +54,7 @@ class MineDDM(BaseDriftDetector):
 
     #@profile(stream=fp)
     def add_element(self, prediction):
-
+        #print(prediction)
         if self.in_concept_change:
             self.reset()
 
