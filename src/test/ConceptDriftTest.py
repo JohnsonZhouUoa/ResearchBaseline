@@ -20,8 +20,8 @@ plt.style.use("seaborn-whitegrid")
 
 # Global variable
 TRAINING_SIZE = 200
-STREAM_SIZE = 500000
-DRIFT_INTERVALS = [5000]
+STREAM_SIZE = 200000
+DRIFT_INTERVALS = [3000, 5000]
 concepts = [0, 1, 2]
 total_D_mine = []
 total_TP_mine = []
@@ -126,6 +126,9 @@ for k in range(0, 5):
     DIST_adwin = [0]
     last = -1
     retrain = False
+    mine_pr = []
+    mine_std = []
+    mine_alpha = []
 
     mineDDM = MineDDM()
     ddm = DDM()
@@ -141,6 +144,9 @@ for k in range(0, 5):
         mineDDM.add_element(y_test != y_predict)
         mine_running_time = time.time() - mine_start_time
         RT_mine.append(mine_running_time)
+        mine_pr.append(mineDDM.get_pr())
+        mine_std.append(mineDDM.get_std())
+        mine_alpha.append(mineDDM.get_global_ratio())
         if mineDDM.detected_warning_zone():
             w_mine += 1
         if mineDDM.detected_change():
@@ -260,6 +266,10 @@ for k in range(0, 5):
     total_RT_adwin.append(np.mean(adwin_running_time))
     print("Mean DIST by adwin:" + str(np.mean(DIST_adwin)))
     total_DIST_adwin.append(np.mean(DIST_adwin))
+
+    plt.plot(mine_pr)
+    plt.plot(mine_alpha)
+    plt.show()
 
 print("Overall result:")
 print("Stream size: " + str(STREAM_SIZE))

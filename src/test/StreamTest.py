@@ -8,9 +8,9 @@ from skmultiflow.data.data_stream import DataStream
 from skmultiflow.trees import HoeffdingTreeClassifier,HoeffdingAdaptiveTreeClassifier, ExtremelyFastDecisionTreeClassifier
 
 # Global variable
-TRAINING_SIZE = 1000
+TRAINING_SIZE = 200
 STREAM_SIZE = 500000
-DRIFT_INTERVALS = [5000]
+DRIFT_INTERVALS = [3000, 5000]
 concepts = [0, 1, 2]
 RANDOMNESS = 50
 

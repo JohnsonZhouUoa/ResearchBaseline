@@ -19,6 +19,8 @@ class MineDDM(BaseDriftDetector):
         self.global_sample_count = 1
         self.global_ratio = 1.0
         self.drift_count = 0
+        self.pr = 0
+        self.std = 0
         self.miss_prob = None
         self.miss_std = None
         self.miss_prob_sd_min = None
@@ -51,6 +53,8 @@ class MineDDM(BaseDriftDetector):
         self.miss_sd_min = float("inf")
         self.learn_ts = True
         self.global_ratio = 0
+        self.pr = 0
+        self.std = 0
 
     #@profile(stream=fp)
     def add_element(self, prediction):
@@ -75,6 +79,7 @@ class MineDDM(BaseDriftDetector):
                 hw_model = ExponentialSmoothing(temp_df, trend='add', seasonal='add').fit(optimized=True)
                 pred = np.array(hw_model.predict(len(self.drift_ts), len(self.drift_ts)))
                 self.predict_result = pred[0]
+                print(self.predict_result)
                 self.learn_ts = False
 
 
@@ -84,13 +89,15 @@ class MineDDM(BaseDriftDetector):
                 ratio = self.sample_count / diff
                 if (ratio < 1):
                     self.global_ratio = ratio
+            else:
+                self.global_ratio = 0
 
 
         self.global_prob = self.calculate_pr(self.global_sample_count, self.drift_count)
         self.local_prob = self.calculate_pr(self.sample_count, 1)
-        pr = self.sigmoid_transformation(self.global_ratio * self.global_prob + (1 - self.global_ratio) * self.local_prob)
+        self.pr = self.sigmoid_transformation(self.global_ratio * self.global_prob + (1 - self.global_ratio) * self.local_prob)
 
-        std = np.sqrt(pr * (1 - pr) / float(self.sample_count))
+        self.std = np.sqrt(self.pr * (1 - self.pr) / float(self.sample_count))
 
         if self.sample_count < self.min_instances:
             return
@@ -102,15 +109,15 @@ class MineDDM(BaseDriftDetector):
 
         #from_pr = False
         if(self.miss_prob < self.default_prob):
-            if pr + std <= self.miss_prob_sd_min:
+            if self.pr + self.std <= self.miss_prob_sd_min:
                 # print("pr replacing")
                 # print(pr)
                 # print("Global ratio:")
                 # print(self.global_ratio)
                 #from_pr = True
-                self.miss_prob_min = pr
-                self.miss_sd_min = std
-                self.miss_prob_sd_min = pr + std
+                self.miss_prob_min = self.pr
+                self.miss_sd_min = self.std
+                self.miss_prob_sd_min = self.pr + self.std
 
         if self.miss_prob + self.miss_std > self.miss_prob_min + self.out_control_level * self.miss_sd_min:
             #if(from_pr):
@@ -141,6 +148,14 @@ class MineDDM(BaseDriftDetector):
             return self.nCk(spe, x) * self.nCk(ove - spe, n - x) / self.nCk(ove, n)
 
     def sigmoid_transformation(self, pr):
-        #return math.sqrt(pr)/(0.01 + math.sqrt(pr))
+        #return math.sqrt(pr)/(self.global_ratio + math.sqrt(pr))
         return (math.exp(pr)/(1+self.global_ratio+math.exp(pr)))
 
+    def get_pr(self):
+        return self.pr
+
+    def get_std(self):
+        return self.std
+
+    def get_global_ratio(self):
+        return self.global_ratio
