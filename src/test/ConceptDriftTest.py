@@ -20,7 +20,7 @@ plt.style.use("seaborn-whitegrid")
 
 # Global variable
 TRAINING_SIZE = 200
-STREAM_SIZE = 200000
+STREAM_SIZE = 500000
 DRIFT_INTERVALS = [3000, 5000]
 concepts = [0, 1, 2]
 total_D_mine = []
@@ -47,6 +47,7 @@ RANDOMNESS = 50
 
 
 for k in range(0, 5):
+    keys = []
     actuals = [0]
     concept_chain = {0:0}
     current_concept = 0
@@ -54,9 +55,10 @@ for k in range(0, 5):
         # if i in drift_points:
         for j in DRIFT_INTERVALS:
             if i % j == 0:
-                randomness = random.randint(0, RANDOMNESS)
-                d = i + ((randomness * 1) if (random.randint(0, 1) > 0) else (randomness * -1))
-                if d not in concept_chain.keys():
+                if i not in keys:
+                    keys.append(i)
+                    randomness = random.randint(0, RANDOMNESS)
+                    d = i + ((randomness * 1) if (random.randint(0, 1) > 0) else (randomness * -1))
                     concept_index = random.randint(0, len(concepts)-1)
                     while concepts[concept_index] == current_concept:
                         concept_index = random.randint(0, len(concepts) - 1)
@@ -130,7 +132,7 @@ for k in range(0, 5):
     mine_std = []
     mine_alpha = []
 
-    mineDDM = MineDDM()
+    mineDDM = MineDDM(actuals=actuals)
     ddm = DDM()
     ph = PageHinkley()
     adwin = ADWIN()
