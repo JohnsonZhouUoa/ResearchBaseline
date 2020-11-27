@@ -1,4 +1,5 @@
 from src.detector.MineDDM import MineDDM
+from src.detector.MinePH import MinePageHinkley
 from skmultiflow.drift_detection import ADWIN
 from skmultiflow.drift_detection import PageHinkley
 from skmultiflow.drift_detection import DDM
@@ -19,10 +20,10 @@ warnings.filterwarnings('ignore')
 plt.style.use("seaborn-whitegrid")
 
 # Global variable
-TRAINING_SIZE = 200
+TRAINING_SIZE = 1
 STREAM_SIZE = 500000
-DRIFT_INTERVALS = [3000, 5000]
-concepts = [0, 1, 2]
+DRIFT_INTERVALS = [5000]
+concepts = [0, 1]
 total_D_mine = []
 total_TP_mine = []
 total_FP_mine = []
@@ -38,15 +39,24 @@ total_TP_ph = []
 total_FP_ph = []
 total_RT_ph = []
 total_DIST_ph = []
+total_D_minePH = []
+total_TP_minePH = []
+total_FP_minePH = []
+total_RT_minePH = []
+total_DIST_minePH = []
 total_D_adwin = []
 total_TP_adwin = []
 total_FP_adwin = []
 total_RT_adwin = []
 total_DIST_adwin = []
-RANDOMNESS = 50
+RANDOMNESS = 0
+seeds = [1235, 5614, 95, 1648, 5356]
+ignore = 0
 
 
 for k in range(0, 5):
+    seed = seeds[k]#random.randint(0, 10000)
+    #seeds.append(seed)
     keys = []
     actuals = [0]
     concept_chain = {0:0}
@@ -68,28 +78,37 @@ for k in range(0, 5):
                     current_concept = concept
 
     x = collections.Counter(concept_chain.values())
-    #print(x)
+    print(x)
+    # desc = {}
+    # for i in concept_chain.keys():
+    #     if i == concept_chain.keys()[-1]:
+    #         desc[i] = conceptOccurence(id = 0, difficulty = 6, noise = 0,
+    #                         appearences = x[0], examples_per_appearence = max(DRIFT_INTERVALS))
+    #     desc[i] = conceptOccurence
 
-    concept_0 = conceptOccurence(id = 0, difficulty = 2, noise = 0,
+    concept_0 = conceptOccurence(id = 0, difficulty = 6, noise = 0,
                             appearences = x[0], examples_per_appearence = max(DRIFT_INTERVALS))
-    concept_1 = conceptOccurence(id = 1, difficulty = 3, noise = 0,
+    concept_1 = conceptOccurence(id = 1, difficulty = 6, noise = 0,
                         appearences = x[1], examples_per_appearence = max(DRIFT_INTERVALS))
-    concept_2 = conceptOccurence(id=2, difficulty=2, noise=0,
-                                 appearences=x[2], examples_per_appearence=max(DRIFT_INTERVALS))
-    desc = {0: concept_0, 1: concept_1, 2:concept_2}
+    # concept_2 = conceptOccurence(id=2, difficulty=2, noise=0,
+    #                              appearences=x[2], examples_per_appearence=max(DRIFT_INTERVALS))
+    desc = {0: concept_0, 1: concept_1}
 
     datastream = RecurringConceptStream(
-        rctype=RCStreamType.AGRAWAL,
+        rctype=RCStreamType.SINE,
         num_samples=STREAM_SIZE,
         noise=0,
         concept_chain=concept_chain,
+        seed=seed,
         desc=desc,
         boost_first_occurance=False)
 
     #X_train, y_train = datastream.next_sample(TRAINING_SIZE)
     X_train = []
     y_train = []
-    for i in range(TRAINING_SIZE):
+    for i in range(0, ignore + TRAINING_SIZE):
+        if i < ignore:
+            continue
         X, y = datastream.next_sample()
         X_train.append(X[0])
         y_train.append(y[0])
@@ -97,44 +116,57 @@ for k in range(0, 5):
     X_train = np.array(X_train)
     y_train = np.array(y_train)
 
-    ht = HoeffdingAdaptiveTreeClassifier()
+    ht = HoeffdingTreeClassifier()
 
     ht.partial_fit(X_train, y_train)
 
-    n_global = TRAINING_SIZE # Cumulative Number of observations
+    n_global = ignore + TRAINING_SIZE # Cumulative Number of observations
     d_mine = 0
     d_ddm = 0
     d_ph = 0
+    d_minePH = 0
     d_adwin = 0
     w_mine= 0
     w_ddm = 0
     w_ph = 0
+    w_minePH = 0
     w_adwin = 0
     TP_mine = []
     TP_ddm = []
     TP_ph = []
+    TP_minePH = []
     TP_adwin = []
     FP_mine = []
     FP_ddm = []
     FP_ph = []
+    FP_minePH = []
     FP_adwin = []
     RT_mine = []
     RT_ddm = []
     RT_ph = []
+    RT_minePH = []
     RT_adwin = []
     DIST_mine = [0]
     DIST_ddm = [0]
     DIST_ph = [0]
+    DIST_minePH = [0]
     DIST_adwin = [0]
     last = -1
     retrain = False
     mine_pr = []
     mine_std = []
     mine_alpha = []
+    pr_min = []
+    std_min = []
+    pi = []
+    mine_x_mean = []
+    mine_sum = []
+    mine_threshold = []
 
-    mineDDM = MineDDM(actuals=actuals)
+    mineDDM = MineDDM(actuals=actuals, initial_training=n_global)
     ddm = DDM()
     ph = PageHinkley()
+    minePH = MinePageHinkley(actuals=actuals, initial_training=n_global)
     adwin = ADWIN()
     while datastream.has_more_samples():
         n_global += 1
@@ -149,6 +181,8 @@ for k in range(0, 5):
         mine_pr.append(mineDDM.get_pr())
         mine_std.append(mineDDM.get_std())
         mine_alpha.append(mineDDM.get_global_ratio())
+        pr_min.append(mineDDM.get_min_pi())
+        pi.append(mineDDM.get_pi())
         if mineDDM.detected_warning_zone():
             w_mine += 1
         if mineDDM.detected_change():
@@ -189,6 +223,24 @@ for k in range(0, 5):
             else:
                 DIST_ph.append(abs(n_global - drift_point))
                 TP_ph.append(drift_point)
+
+        minePH_start_time = time.time()
+        minePH.add_element(y_test != y_predict)
+        minePH_running_time = time.time() - minePH_start_time
+        RT_minePH.append(minePH_running_time)
+        mine_x_mean.append(minePH.get_mean())
+        mine_sum.append(minePH.get_sum())
+        mine_threshold.append(minePH.get_threshold())
+        if minePH.detected_warning_zone():
+            w_minePH += 1
+        if minePH.detected_change():
+            d_minePH += 1
+            drift_point = max([i for i in actuals if i <= n_global])
+            if (drift_point == 0 or drift_point in TP_minePH):
+                FP_minePH.append(drift_point)
+            else:
+                DIST_minePH.append(abs(n_global - drift_point))
+                TP_minePH.append(drift_point)
 
         adwin_start_time = time.time()
         adwin.add_element(float(y_test != y_predict))
@@ -258,6 +310,17 @@ for k in range(0, 5):
     print("Mean DIST by ph:" + str(np.mean(DIST_ph)))
     total_DIST_ph.append(np.mean(DIST_ph))
 
+    print("Number of drifts detected by mine PH: " + str(d_minePH))
+    total_D_minePH.append(d_minePH)
+    print("TP by minePH:" + str(len(TP_minePH)))
+    total_TP_minePH.append(len(TP_minePH))
+    print("FP by minePH:" + str(len(FP_minePH)))
+    total_FP_minePH.append(len(FP_minePH))
+    print("Mean RT  %s seconds" % (np.mean(minePH_running_time)))
+    total_RT_minePH.append(np.mean(minePH_running_time))
+    print("Mean DIST by minePH:" + str(np.mean(DIST_minePH)))
+    total_DIST_minePH.append(np.mean(DIST_minePH))
+
     print("Number of drifts detected by adwin: " + str(d_adwin))
     total_D_adwin.append(d_adwin)
     print("TP by adwin:" + str(len(TP_adwin)))
@@ -269,14 +332,24 @@ for k in range(0, 5):
     print("Mean DIST by adwin:" + str(np.mean(DIST_adwin)))
     total_DIST_adwin.append(np.mean(DIST_adwin))
 
-    plt.plot(mine_pr)
-    plt.plot(mine_alpha)
+    plt.plot(mine_pr, color="blue")
+    plt.plot(mine_alpha, color="green")
     plt.show()
+    plt.plot(pi, color="red")
+    plt.plot(pr_min, color="yellow")
+    plt.show()
+
+    # plt.plot(mine_x_mean, color="red")
+    # plt.show()
+    # plt.plot(mine_sum, color="blue")
+    # plt.plot(mine_threshold, color="green")
+    # plt.show()
 
 print("Overall result:")
 print("Stream size: " + str(STREAM_SIZE))
 print("Drift intervals: " + str(DRIFT_INTERVALS))
 print("Actual drifts:" + str(len(actuals)))
+print("Seeds: " + str(seeds))
 
 print("Overall result for mine:")
 print("Average Drift Detected: ", str(np.mean(total_D_mine)))
@@ -358,6 +431,31 @@ print("Minimum DIST: ", str(np.min(total_DIST_ph)))
 print("Maximum DIST: ", str(np.max(total_DIST_ph)))
 print("DIST Standard Deviation: ", str(np.std(total_DIST_ph)))
 
+print("Overall result for minePH:")
+print("Average Drift Detected: ", str(np.mean(total_D_minePH)))
+print("Minimum Drift Detected: ", str(np.min(total_D_minePH)))
+print("Maximum Drift Detected: ", str(np.max(total_D_minePH)))
+print("Drift Detected Standard Deviation: ", str(np.std(total_D_minePH)))
+
+print("Average TP: ", str(np.mean(total_TP_minePH)))
+print("Minimum TP: ", str(np.min(total_TP_minePH)))
+print("Maximum TP: ", str(np.max(total_TP_minePH)))
+print("TP Standard Deviation: ", str(np.std(total_TP_minePH)))
+
+print("Average FP: ", str(np.mean(total_FP_minePH)))
+print("Minimum FP: ", str(np.min(total_FP_minePH)))
+print("Maximum FP: ", str(np.max(total_FP_minePH)))
+print("FP Standard Deviation: ", str(np.std(total_FP_minePH)))
+
+print("Average RT: ", str(np.mean(total_RT_minePH)))
+print("Minimum RT: ", str(np.min(total_RT_minePH)))
+print("Maximum RT: ", str(np.max(total_RT_minePH)))
+print("RT Standard Deviation: ", str(np.std(total_RT_minePH)))
+
+print("Average DIST: ", str(np.mean(total_DIST_minePH)))
+print("Minimum DIST: ", str(np.min(total_DIST_minePH)))
+print("Maximum DIST: ", str(np.max(total_DIST_minePH)))
+print("DIST Standard Deviation: ", str(np.std(total_DIST_minePH)))
 
 print("Overall result for adwin:")
 print("Average Drift Detected: ", str(np.mean(total_D_adwin)))
