@@ -22,9 +22,9 @@ plt.style.use("seaborn-whitegrid")
 
 # Global variable
 TRAINING_SIZE = 1
-STREAM_SIZE = 1000000
-grace = 2000
-DRIFT_INTERVALS = [10000, 25000, 35000]
+STREAM_SIZE = 5000000
+grace = 200
+DRIFT_INTERVALS = [10000]
 concepts = [0, 1, 2]
 total_D_mine = []
 total_TP_mine = []
@@ -51,7 +51,7 @@ total_TP_adwin = []
 total_FP_adwin = []
 total_RT_adwin = []
 total_DIST_adwin = []
-RANDOMNESS = 100
+RANDOMNESS = 0
 seeds = [6976, 2632, 2754, 5541, 3681, 1456, 7041, 328, 5337, 4622,
          2757, 1788, 3399, 4639, 5306, 5742, 3015, 1554, 8548, 1313,
          4738, 9458, 8145, 3624, 1913, 1654, 2988, 2031, 1802, 4338]
@@ -59,7 +59,7 @@ ignore = 0
 random.seed(6976)
 
 
-for k in range(0, 30):
+for k in range(0, 10):
     seed = seeds[k]#random.randint(0, 10000)
     #seeds.append(seed)
     keys = []
@@ -75,6 +75,18 @@ for k in range(0, 30):
                     randomness = random.randint(0, RANDOMNESS)
                     d = i + ((randomness * 1) if (random.randint(0, 1) > 0) else (randomness * -1))
                     concept_index = random.randint(0, len(concepts)-1)
+                    while concepts[concept_index] == current_concept:
+                        concept_index = random.randint(0, len(concepts) - 1)
+                    concept = concepts[concept_index]
+                    concept_chain[d] = concept
+                    actuals.append(d)
+                    current_concept = concept
+
+                    i2 = i + 2000
+                    keys.append(i2)
+                    randomness = random.randint(0, RANDOMNESS)
+                    d = i2 + ((randomness * 1) if (random.randint(0, 1) > 0) else (randomness * -1))
+                    concept_index = random.randint(0, len(concepts) - 1)
                     while concepts[concept_index] == current_concept:
                         concept_index = random.randint(0, len(concepts) - 1)
                     concept = concepts[concept_index]
@@ -152,28 +164,28 @@ for k in range(0, 30):
 
         X_test, y_test = datastream.next_sample()
         y_predict = ht.predict(X_test)
-
+        ddm_start_time = time.time()
+        ddm.add_element(y_test != y_predict)
+        # mem_use = memory_usage(ddm.add_element(y_test != y_predict), max_usage=True)
+        # print("Memory_usage:")
+        # print(mem_use)
+        ddm_running_time = time.time() - ddm_start_time
+        RT_ddm.append(ddm_running_time)
         if (n_global > grace_end):
-            ddm_start_time = time.time()
-            ddm.add_element(y_test != y_predict)
-            # mem_use = memory_usage(ddm.add_element(y_test != y_predict), max_usage=True)
-            # print("Memory_usage:")
-            # print(mem_use)
-            ddm_running_time = time.time() - ddm_start_time
-            RT_ddm.append(ddm_running_time)
             if ddm.detected_warning_zone():
                 w_ddm += 1
             if ddm.detected_change():
                 d_ddm += 1
                 drift_point = min(actuals, key=lambda x: abs(x - n_global))
-                if (drift_point != 0 and drift_point not in TP_ddm and abs(drift_point - n_global) <= 500):
+                if (drift_point != 0 and drift_point not in TP_ddm and abs(drift_point - n_global) <= 1000):
+                    print("A true positive detected at " + str(n_global))
                     DIST_ddm.append(abs(n_global - drift_point))
                     TP_ddm.append(drift_point)
                     ht = HoeffdingTreeClassifier()
                     grace_end = n_global + grace
                 else:
+                    print("A false positive detected at " + str(n_global))
                     FP_ddm.append(drift_point)
-
         ht.partial_fit(X_test, y_test)
 
     print("Round " + str(k+1) + " out of 10 rounds")
