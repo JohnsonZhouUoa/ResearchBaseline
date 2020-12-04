@@ -1,9 +1,4 @@
 from src.detector.MineDDM import MineDDM
-from src.detector.MinePH import MinePageHinkley
-from skmultiflow.drift_detection import ADWIN
-from skmultiflow.drift_detection import PageHinkley
-from skmultiflow.drift_detection import DDM
-from sklearn.tree import DecisionTreeClassifier
 from skika.data.reccurring_concept_stream import RCStreamType, RecurringConceptStream, conceptOccurence, RecurringConceptGradualStream
 import matplotlib.pyplot as plt
 import warnings
@@ -11,9 +6,7 @@ import time
 import numpy as np
 import random
 import collections
-import sys
 from skmultiflow.trees import HoeffdingTreeClassifier, HoeffdingAdaptiveTreeClassifier, ExtremelyFastDecisionTreeClassifier
-from memory_profiler import memory_usage
 
 
 
@@ -61,13 +54,11 @@ random.seed(6976)
 
 for k in range(0, 10):
     seed = seeds[k]#random.randint(0, 10000)
-    #seeds.append(seed)
     keys = []
     actuals = [0]
     concept_chain = {0:0}
     current_concept = 0
     for i in range(1,STREAM_SIZE+1):
-        # if i in drift_points:
         for j in DRIFT_INTERVALS:
             if i % j == 0:
                 if i not in keys:
@@ -178,8 +169,8 @@ for k in range(0, 10):
                 w_mine += 1
             if mineDDM.detected_change():
                 d_mine += 1
+                ht_p = HoeffdingTreeClassifier()
                 drift_point = min(actuals, key=lambda x: abs(x - n_global))
-                # if(drift_point == 0 or drift_point in TP_mine):
                 if mineDDM.get_TP() and not mineDDM.get_FP():
                     print("A true positive detected at " + str(n_global))
                     DIST_mine.append(abs(n_global - drift_point))
@@ -189,7 +180,8 @@ for k in range(0, 10):
                 else:
                     print("A false positive detected at " + str(n_global))
                     FP_mine.append(drift_point)
-
+        if ht_p is not None:
+            ht_p.partial_fit(X_test, y_test)
         ht.partial_fit(X_test, y_test)
 
     print("Round " + str(k+1) + " out of 10 rounds")
