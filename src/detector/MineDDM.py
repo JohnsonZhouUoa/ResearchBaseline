@@ -98,15 +98,19 @@ class MineDDM(BaseDriftDetector):
             self.miss_prob_sd_min = self.miss_prob + self.miss_std
 
 
-        if (self.miss_prob + self.miss_std > self.miss_prob_min + self.out_control_level * self.miss_sd_min)\
-                or (self.miss_prob + self.miss_std > self.pr + self.out_control_level * self.std and self.global_ratio > self.confidence):
+        if (self.miss_prob + self.miss_std > self.miss_prob_min + self.out_control_level * self.miss_sd_min):
             self.in_concept_change = True
-            key = min(self.actuals.keys(), key=lambda x:abs(x - n))
-            if key != 0 and self.actuals[key] == 0 and abs(key - n) <= 1000:
-                self.drift_ts.append(n)
-                self.detect_TP()
-            else:
-                self.detect_FP()
+            # key = min(self.actuals.keys(), key=lambda x:abs(x - n))
+            # if key != 0 and self.actuals[key] == 0 and abs(key - n) <= 1000:
+            #     self.drift_ts.append(n)
+            #     self.detect_TP()
+            # else:
+            #     self.detect_FP()
+
+
+        if (self.miss_prob + self.miss_std > self.pr + self.out_control_level * self.std and self.global_ratio > self.confidence):
+            self.in_concept_change = True
+
 
         elif self.miss_prob + self.miss_std > self.miss_prob_min + self.warning_level * self.miss_sd_min:
             self.in_warning_zone = True
@@ -156,6 +160,27 @@ class MineDDM(BaseDriftDetector):
 
     def detect_TP(self, n):
         self.drift_ts.append(n)
+
+        if (len(self.drift_ts) >= self.ts_length):
+            # Majority Vote approach
+            ts = np.diff(self.drift_ts)
+            periods = []
+            for i in range(0, math.floor(self.ts_length / 2)):
+                current = i
+                for j in range(current + 2, min(self.ts_length, math.floor(current + self.ts_length / 2))):
+                    if j + 1 < self.ts_length - 1:
+                        if abs(ts[j] - ts[current]) < 1000:
+                            if abs(ts[j + 1] - ts[current + 1]) < 1000:
+                                periods.append(j - current)
+                                current = j
+
+            if len(periods) == 0:
+                self.period = 1
+            else:
+                self.period = math.floor(max(set(periods), key=periods.count))
+
+            print("Period: " + str(self.period))
+
         if (len(self.drift_ts) > self.ts_length):
             ts = np.diff(self.drift_ts)
 
@@ -164,7 +189,13 @@ class MineDDM(BaseDriftDetector):
             else:
                 # TRUE POSITIVE detected
                 learn = ts[-(2 * self.period):]
-                print("Learning: " + str(learn))
+                print("Learning before: " + str(learn))
+                # Averaging the effect of variations.
+                for i in range(self.period):
+                    average = (learn[i] + learn[i + self.period])/2
+                    learn[i] = average
+                    learn[i + self.period] = average
+                print("Learning after: " + str(learn))
                 temp_df = pd.DataFrame(
                     {'timestamp': pd.date_range('2000-01-01', periods=len(learn), freq=None),
                      'ts': learn})
@@ -178,35 +209,12 @@ class MineDDM(BaseDriftDetector):
 
             self.ts_prediction = n + self.diff
             self.drift_ts.pop(0)
+        return
 
 
     def detect_FP(self, n):
-        if (self.FP_detected and len(self.drift_ts) >= self.ts_length):
-            # Majority Vote approach
-            ts = np.diff(self.drift_ts)
-            periods = []
-            for i in range(0, math.floor(self.ts_length / 2)):
-                current = i
-                for j in range(current + 2, self.ts_length):
-                    if j + 1 < self.ts_length - 1:
-                        if abs(ts[j] - ts[current]) < 1000:
-                            if abs(ts[j + 1] - ts[current + 1]) < 1000:
-                                periods.append(j - current)
-                                current = j
-
-            if len(periods) == 0:
-                self.period = 1
-            else:
-                self.period = math.floor(max(set(periods), key=periods.count))
-
-            print("Period: " + str(self.period))
-            self.diff = self.ts_prediction - n
-
-    def get_TP(self):
-        return self.TP_detected
-
-    def get_FP(self):
-        return self.FP_detected
+        self.diff = self.ts_prediction - n
+        return
 
     def get_ts_object(self):
         return self.drift_ts

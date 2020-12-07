@@ -22,35 +22,15 @@ plt.style.use("seaborn-whitegrid")
 
 # Global variable
 TRAINING_SIZE = 1
-STREAM_SIZE = 5000000
-grace = 200
-DRIFT_INTERVALS = [10000]
+STREAM_SIZE = 2000000
+grace = 1000
+DRIFT_INTERVALS = [20000]
 concepts = [0, 1, 2]
-total_D_mine = []
-total_TP_mine = []
-total_FP_mine = []
-total_RT_mine = []
-total_DIST_mine = []
 total_D_ddm = []
 total_TP_ddm = []
 total_FP_ddm = []
 total_RT_ddm = []
 total_DIST_ddm = []
-total_D_ph = []
-total_TP_ph = []
-total_FP_ph = []
-total_RT_ph = []
-total_DIST_ph = []
-total_D_minePH = []
-total_TP_minePH = []
-total_FP_minePH = []
-total_RT_minePH = []
-total_DIST_minePH = []
-total_D_adwin = []
-total_TP_adwin = []
-total_FP_adwin = []
-total_RT_adwin = []
-total_DIST_adwin = []
 RANDOMNESS = 0
 seeds = [6976, 2632, 2754, 5541, 3681, 1456, 7041, 328, 5337, 4622,
          2757, 1788, 3399, 4639, 5306, 5742, 3015, 1554, 8548, 1313,
@@ -82,7 +62,7 @@ for k in range(0, 10):
                     actuals.append(d)
                     current_concept = concept
 
-                    i2 = i + 2000
+                    i2 = i + 7000
                     keys.append(i2)
                     randomness = random.randint(0, RANDOMNESS)
                     d = i2 + ((randomness * 1) if (random.randint(0, 1) > 0) else (randomness * -1))
@@ -116,7 +96,7 @@ for k in range(0, 10):
     datastream = RecurringConceptStream(
         rctype=RCStreamType.SINE,
         num_samples=STREAM_SIZE,
-        noise=0.1,
+        noise=0.3,
         concept_chain=concept_chain,
         seed=seed,
         desc=desc,
@@ -148,6 +128,7 @@ for k in range(0, 10):
     DIST_ddm = [0]
     retrain = False
     grace_end = n_global
+    detect_end = n_global
     mine_pr = []
     mine_std = []
     mine_alpha = []
@@ -157,6 +138,9 @@ for k in range(0, 10):
     mine_x_mean = []
     mine_sum = []
     mine_threshold = []
+    pred_grace_ht = []
+    pred_grace_ht_p = []
+    ht_p = None
 
     ddm = DDM()
     while datastream.has_more_samples():
@@ -166,26 +150,38 @@ for k in range(0, 10):
         y_predict = ht.predict(X_test)
         ddm_start_time = time.time()
         ddm.add_element(y_test != y_predict)
-        # mem_use = memory_usage(ddm.add_element(y_test != y_predict), max_usage=True)
-        # print("Memory_usage:")
-        # print(mem_use)
+
         ddm_running_time = time.time() - ddm_start_time
         RT_ddm.append(ddm_running_time)
         if (n_global > grace_end):
-            if ddm.detected_warning_zone():
-                w_ddm += 1
-            if ddm.detected_change():
-                d_ddm += 1
-                drift_point = min(actuals, key=lambda x: abs(x - n_global))
-                if (drift_point != 0 and drift_point not in TP_ddm and abs(drift_point - n_global) <= 1000):
-                    print("A true positive detected at " + str(n_global))
-                    DIST_ddm.append(abs(n_global - drift_point))
-                    TP_ddm.append(drift_point)
-                    ht = HoeffdingTreeClassifier()
+            if (n_global > detect_end):
+                if ht_p is not None:
+                    drift_point = detect_end - 2 * grace
+                    print("Accuracy of ht: " + str(np.mean(pred_grace_ht)))
+                    print("Accuracy of ht_p: " + str(np.mean(pred_grace_ht_p)))
+                    if (np.mean(pred_grace_ht_p) > np.mean(pred_grace_ht)):
+                        print("TP detected at: " + str(drift_point))
+                        TP_ddm.append(drift_point)
+                        ht = ht_p
+                    else:
+                        print("FP detected at: " + str(drift_point))
+                        FP_ddm.append(drift_point)
+                    ht_p = None
+                    pred_grace_ht = []
+                    pred_grace_ht_p = []
+                if ddm.detected_warning_zone():
+                    w_ddm += 1
+                if ddm.detected_change():
+                    d_ddm += 1
+                    ht_p = HoeffdingTreeClassifier()
                     grace_end = n_global + grace
-                else:
-                    print("A false positive detected at " + str(n_global))
-                    FP_ddm.append(drift_point)
+                    detect_end = n_global + 2 * grace
+            else:
+                pred_grace_ht.append(y_test == y_predict)
+                pred_grace_ht_p.append(y_test == ht_p.predict(X_test))
+
+        if ht_p is not None:
+            ht_p.partial_fit(X_test, y_test)
         ht.partial_fit(X_test, y_test)
 
     print("Round " + str(k+1) + " out of 10 rounds")

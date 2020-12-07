@@ -24,6 +24,26 @@ total_TP_mine = []
 total_FP_mine = []
 total_RT_mine = []
 total_DIST_mine = []
+total_D_ddm = []
+total_TP_ddm = []
+total_FP_ddm = []
+total_RT_ddm = []
+total_DIST_ddm = []
+total_D_ph = []
+total_TP_ph = []
+total_FP_ph = []
+total_RT_ph = []
+total_DIST_ph = []
+total_D_minePH = []
+total_TP_minePH = []
+total_FP_minePH = []
+total_RT_minePH = []
+total_DIST_minePH = []
+total_D_adwin = []
+total_TP_adwin = []
+total_FP_adwin = []
+total_RT_adwin = []
+total_DIST_adwin = []
 RANDOMNESS = 0
 seeds = [6976, 2632, 2754, 5541, 3681, 1456, 7041, 328, 5337, 4622,
          2757, 1788, 3399, 4639, 5306, 5742, 3015, 1554, 8548, 1313,
@@ -112,8 +132,9 @@ for k in range(0, 10):
     RT_mine = []
     MEMORY_mine = []
     grace_end = n_global
-    detect_end = n_global
     DIST_mine = [0]
+    last = -1
+    retrain = False
     mine_pr = []
     mine_std = []
     mine_alpha = []
@@ -123,9 +144,6 @@ for k in range(0, 10):
     mine_x_mean = []
     mine_sum = []
     mine_threshold = []
-    pred_grace_ht = []
-    pred_grace_ht_p = []
-    ht_p = None
 
     mineDDM = MineDDM()
     while datastream.has_more_samples():
@@ -147,36 +165,22 @@ for k in range(0, 10):
         # pr_min.append(mineDDM.get_min_pi())
         # pi.append(mineDDM.get_pi())
         if (n_global > grace_end):
-            if (n_global > detect_end):
-                if ht_p is not None:
-                    drift_point = detect_end - 2 * grace
-                    print("Accuracy of ht: " + str(np.mean(pred_grace_ht)))
-                    print("Accuracy of ht_p: " + str(np.mean(pred_grace_ht_p)))
-                    if (np.mean(pred_grace_ht_p) > np.mean(pred_grace_ht)):
-                        print("TP detected at: " + str(drift_point))
-                        mineDDM.detect_TP(drift_point)
-                        TP_mine.append(drift_point)
-                        ht = ht_p
-                    else:
-                        print("FP detected at: " + str(drift_point))
-                        mineDDM.detect_FP(drift_point)
-                        FP_mine.append(drift_point)
-                    ht_p = None
-                    pred_grace_ht = []
-                    pred_grace_ht_p = []
-                if mineDDM.detected_warning_zone():
-                    w_mine += 1
-                if mineDDM.detected_change():
-                    d_mine += 1
-                    ht_p = HoeffdingTreeClassifier()
+            if mineDDM.detected_warning_zone():
+                w_mine += 1
+            if mineDDM.detected_change():
+                d_mine += 1
+                drift_point = key = min(actuals, key=lambda x:abs(x - n_global))
+                if(drift_point != 0 and drift_point not in TP_mine and abs(drift_point - n_global) <= 1000):
+                    print("A true positive detected at " + str(n_global))
+                    DIST_mine.append(abs(n_global - drift_point))
+                    TP_mine.append(drift_point)
+                    ht = HoeffdingTreeClassifier()
+                    mineDDM.detect_TP(n_global)
                     grace_end = n_global + grace
-                    detect_end = n_global + 2 * grace
-            else:
-                pred_grace_ht.append(y_test == y_predict)
-                pred_grace_ht_p.append(y_test == ht_p.predict(X_test))
-
-        if ht_p is not None:
-            ht_p.partial_fit(X_test, y_test)
+                else:
+                    print("A false positive detected at " + str(n_global))
+                    mineDDM.detect_FP(n_global)
+                    FP_mine.append(drift_point)
         ht.partial_fit(X_test, y_test)
 
     print("Round " + str(k+1) + " out of 10 rounds")
