@@ -15,15 +15,19 @@ plt.style.use("seaborn-whitegrid")
 
 # Global variable
 TRAINING_SIZE = 1
-STREAM_SIZE = 2000000
+STREAM_SIZE = 10000000
 grace = 1000
-DRIFT_INTERVALS = [20000]
+DRIFT_INTERVALS = [10000]
 concepts = [0, 1, 2]
 total_D_mine = []
 total_TP_mine = []
 total_FP_mine = []
 total_RT_mine = []
 total_DIST_mine = []
+precisions = []
+recalls = []
+f1_scores = []
+f2_scores = []
 RANDOMNESS = 0
 seeds = [6976, 2632, 2754, 5541, 3681, 1456, 7041, 328, 5337, 4622,
          2757, 1788, 3399, 4639, 5306, 5742, 3015, 1554, 8548, 1313,
@@ -81,7 +85,7 @@ for k in range(0, 10):
     datastream = RecurringConceptStream(
         rctype=RCStreamType.SINE,
         num_samples=STREAM_SIZE,
-        noise=0.3,
+        noise=0,
         concept_chain=concept_chain,
         seed=seed,
         desc=desc,
@@ -193,6 +197,19 @@ for k in range(0, 10):
     print("Mean DIST by mine:" + str(np.mean(DIST_mine)))
     total_DIST_mine.append(np.mean(DIST_mine))
 
+    precision = len(TP_mine) / (len(TP_mine) + len(FP_mine))
+    recall = len(TP_mine) / (len(actuals) - 1)
+    f1 = 2 * precision * recall / (precision + recall)
+    f2 = 5 * precision * recall / (4 * precision + recall)
+    precisions.append(precision)
+    recalls.append(recall)
+    f1_scores.append(f1)
+    f2_scores.append(f2)
+    print("Precision: ", precision)
+    print("Recall: ", recall)
+    print("F1: ", f1)
+    print("F2: ", f2)
+
     # plt.plot(mine_pr, color="blue")
     # plt.plot(mine_alpha, color="green")
     # plt.show()
@@ -238,10 +255,18 @@ print("Minimum DIST: ", str(np.min(total_DIST_mine)))
 print("Maximum DIST: ", str(np.max(total_DIST_mine)))
 print("DIST Standard Deviation: ", str(np.std(total_DIST_mine)))
 
-precision = np.mean(total_TP_mine)/(np.mean(total_TP_mine) + np.mean(total_FP_mine))
-recall = np.mean(total_TP_mine)/(len(actuals) - 1)
+print("Precisions: " + str(precisions))
+print("Maximum: " + str(max(precisions)))
+print("Minimum: " + str(min(precisions)))
 
-print("Precision: ", precision)
-print("Recall: ", recall)
-print("F1: ", 2 * precision * recall / (precision + recall))
-print("F2: ", 5 * precision * recall / (4 * precision + recall))
+print("Recalls: " + str(recalls))
+print("Maximum: " + str(max(recalls)))
+print("Minimum: " + str(min(recalls)))
+
+print("F1 scores: " + str(f1_scores))
+print("Maximum: " + str(max(f1_scores)))
+print("Minimum: " + str(min(f1_scores)))
+
+print("F2 scores: " + str(f2_scores))
+print("Maximum: " + str(max(f2_scores)))
+print("Minimum: " + str(min(f2_scores)))
