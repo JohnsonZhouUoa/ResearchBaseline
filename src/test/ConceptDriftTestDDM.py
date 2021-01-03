@@ -22,9 +22,9 @@ plt.style.use("seaborn-whitegrid")
 
 # Global variable
 TRAINING_SIZE = 1
-STREAM_SIZE = 10000000
+STREAM_SIZE = 5000000
 grace = 1000
-DRIFT_INTERVALS = [10000]
+DRIFT_INTERVALS = [30000]
 concepts = [0, 1, 2]
 total_D_ddm = []
 total_TP_ddm = []
@@ -43,7 +43,7 @@ ignore = 0
 random.seed(6976)
 
 
-for k in range(0, 10):
+for k in range(9, 14):
     seed = seeds[k]#random.randint(0, 10000)
     #seeds.append(seed)
     keys = []
@@ -97,7 +97,7 @@ for k in range(0, 10):
     #                              appearences=x[2], examples_per_appearence=max(DRIFT_INTERVALS))
     desc = {0: concept_0, 1: concept_1, 2:concept_2}
 
-    datastream = RecurringConceptStream(
+    datastream = RecurringConceptGradualStream(
         rctype=RCStreamType.SINE,
         num_samples=STREAM_SIZE,
         noise=0,
@@ -145,6 +145,7 @@ for k in range(0, 10):
     pred_grace_ht = []
     pred_grace_ht_p = []
     ht_p = None
+    TP_var = []
 
     ddm = DDM()
     while datastream.has_more_samples():
@@ -167,9 +168,12 @@ for k in range(0, 10):
                         print("TP detected at: " + str(drift_point))
                         TP_ddm.append(drift_point)
                         ht = ht_p
+                        TP_var.append(abs(np.mean(pred_grace_ht_p) - np.mean(pred_grace_ht)))
                     else:
                         print("FP detected at: " + str(drift_point))
                         FP_ddm.append(drift_point)
+
+
                     ht_p = None
                     pred_grace_ht = []
                     pred_grace_ht_p = []
@@ -248,17 +252,17 @@ print("Maximum DIST: ", str(np.max(total_DIST_ddm)))
 print("DIST Standard Deviation: ", str(np.std(total_DIST_ddm)))
 
 print("Precisions: " + str(precisions))
-print("Maximum: " + str(max(precisions)))
-print("Minimum: " + str(min(precisions)))
+print("Average: " + str(np.mean(precisions)))
+print("Deviation: " + str(np.std(precisions)))
 
 print("Recalls: " + str(recalls))
-print("Maximum: " + str(max(recalls)))
-print("Minimum: " + str(min(recalls)))
+print("Average: " + str(np.mean(recalls)))
+print("Deviation: " + str(np.std(recalls)))
 
 print("F1 scores: " + str(f1_scores))
-print("Maximum: " + str(max(f1_scores)))
-print("Minimum: " + str(min(f1_scores)))
+print("Average: " + str(np.mean(f1_scores)))
+print("Deviation: " + str(np.std(f1_scores)))
 
 print("F2 scores: " + str(f2_scores))
-print("Maximum: " + str(max(f2_scores)))
-print("Minimum: " + str(min(f2_scores)))
+print("Average: " + str(np.mean(f2_scores)))
+print("Deviation: " + str(np.std(f2_scores)))

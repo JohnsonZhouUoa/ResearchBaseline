@@ -108,7 +108,8 @@ class MineDDM(BaseDriftDetector):
             #     self.detect_FP()
 
 
-        if (self.miss_prob + self.miss_std > self.pr + self.out_control_level * self.std and self.global_ratio > self.confidence):
+        if ((self.miss_prob + self.miss_std > self.pr + self.out_control_level * self.std) and (self.global_ratio > self.confidence)):
+            print("Drift detected by AutoDDM")
             self.in_concept_change = True
 
 
@@ -132,7 +133,7 @@ class MineDDM(BaseDriftDetector):
             return self.nCk(spe, x) * self.nCk(ove - spe, n - x) / self.nCk(ove, n)
 
     def activation_function(self, pr):
-        return math.sqrt(pr) / (0.1 * self.global_ratio + math.sqrt(pr))
+        return math.sqrt(pr) / (0.05 * self.global_ratio + math.sqrt(pr))
 
     def sigmoid_transformation(self, p):
         return 1/(1 + math.exp(-p))
@@ -185,7 +186,7 @@ class MineDDM(BaseDriftDetector):
             ts = np.diff(self.drift_ts)
 
             if (self.period <= 1):
-                self.diff = ts[-1]
+                self.diff = -1
             else:
                 # TRUE POSITIVE detected
                 learn = ts[-(2 * self.period):]
