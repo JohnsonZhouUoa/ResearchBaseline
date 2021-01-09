@@ -1,5 +1,5 @@
 from src.detector.AutoDDM import AutoDDM
-from src.detector.MinePH import MinePageHinkley
+from src.detector.AutoPH import AutoPageHinkley
 from skmultiflow.drift_detection import ADWIN
 from skmultiflow.drift_detection import PageHinkley
 from skmultiflow.drift_detection import DDM
