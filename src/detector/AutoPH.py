@@ -7,7 +7,7 @@ from functools import reduce
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 import pandas as pd
 
-class MinePageHinkley(BaseDriftDetector):
+class AutoPageHinkley(BaseDriftDetector):
     """ Page-Hinkley method for concept drift detection.
 
     Notes
