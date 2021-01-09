@@ -1,4 +1,4 @@
-from src.detector.MineDDM import MineDDM
+from src.detector.AutoDDM import AutoDDM
 from src.detector.MinePH import MinePageHinkley
 from skmultiflow.drift_detection import ADWIN
 from skmultiflow.drift_detection import PageHinkley
@@ -13,7 +13,7 @@ import random
 import collections
 import sys
 from skmultiflow.trees import HoeffdingTreeClassifier, HoeffdingAdaptiveTreeClassifier, ExtremelyFastDecisionTreeClassifier
-from memory_profiler import memory_usage
+from guppy import hpy
 
 
 
@@ -22,20 +22,21 @@ plt.style.use("seaborn-whitegrid")
 
 # Global variable
 TRAINING_SIZE = 1
-STREAM_SIZE = 5000000
+STREAM_SIZE = 6000000
 grace = 1000
-DRIFT_INTERVALS = [30000]
+DRIFT_INTERVALS = [50000]
 concepts = [0, 1, 2]
 total_D_ddm = []
 total_TP_ddm = []
 total_FP_ddm = []
 total_RT_ddm = []
 total_DIST_ddm = []
+total_mean_mem = []
 precisions = []
 recalls = []
 f1_scores = []
 f2_scores = []
-RANDOMNESS = 0
+RANDOMNESS = 100
 seeds = [6976, 2632, 2754, 5541, 3681, 1456, 7041, 328, 5337, 4622,
          2757, 1788, 3399, 4639, 5306, 5742, 3015, 1554, 8548, 1313,
          4738, 9458, 8145, 3624, 1913, 1654, 2988, 2031, 1802, 4338]
@@ -43,7 +44,7 @@ ignore = 0
 random.seed(6976)
 
 
-for k in range(9, 14):
+for k in range(15, 20):
     seed = seeds[k]#random.randint(0, 10000)
     #seeds.append(seed)
     keys = []
@@ -97,8 +98,8 @@ for k in range(9, 14):
     #                              appearences=x[2], examples_per_appearence=max(DRIFT_INTERVALS))
     desc = {0: concept_0, 1: concept_1, 2:concept_2}
 
-    datastream = RecurringConceptGradualStream(
-        rctype=RCStreamType.SINE,
+    datastream = RecurringConceptStream(
+        rctype=RCStreamType.AGRAWAL,
         num_samples=STREAM_SIZE,
         noise=0,
         concept_chain=concept_chain,
@@ -129,7 +130,8 @@ for k in range(9, 14):
     TP_ddm = []
     FP_ddm = []
     RT_ddm = []
-    DIST_ddm = [0]
+    DIST_ddm = []
+    mem_ddm = []
     retrain = False
     grace_end = n_global
     detect_end = n_global
@@ -148,14 +150,15 @@ for k in range(9, 14):
     TP_var = []
 
     ddm = DDM()
+    h = hpy()
     while datastream.has_more_samples():
         n_global += 1
 
         X_test, y_test = datastream.next_sample()
         y_predict = ht.predict(X_test)
+
         ddm_start_time = time.time()
         ddm.add_element(y_test != y_predict)
-
         ddm_running_time = time.time() - ddm_start_time
         RT_ddm.append(ddm_running_time)
         if (n_global > grace_end):
@@ -164,14 +167,29 @@ for k in range(9, 14):
                     drift_point = detect_end - 2 * grace
                     print("Accuracy of ht: " + str(np.mean(pred_grace_ht)))
                     print("Accuracy of ht_p: " + str(np.mean(pred_grace_ht_p)))
-                    if (np.mean(pred_grace_ht_p) > np.mean(pred_grace_ht)):
-                        print("TP detected at: " + str(drift_point))
-                        TP_ddm.append(drift_point)
-                        ht = ht_p
-                        TP_var.append(abs(np.mean(pred_grace_ht_p) - np.mean(pred_grace_ht)))
+                    if (len(TP_var) == 0):
+                        if (np.mean(pred_grace_ht_p) > np.mean(pred_grace_ht)):
+                            print("TP detected at: " + str(drift_point))
+                            drift_actual = min(actuals, key=lambda x: abs(x - drift_point))
+                            DIST_ddm.append(abs(drift_actual - drift_point))
+                            TP_ddm.append(drift_point)
+                            ht = ht_p
+                            TP_var.append(abs(np.mean(pred_grace_ht_p) - np.mean(pred_grace_ht)))
+                        else:
+                            print("FP detected at: " + str(drift_point))
+                            FP_ddm.append(drift_point)
                     else:
-                        print("FP detected at: " + str(drift_point))
-                        FP_ddm.append(drift_point)
+                        if (np.mean(pred_grace_ht_p) > np.mean(pred_grace_ht) or (
+                                abs(np.mean(pred_grace_ht_p) - np.mean(pred_grace_ht)) <= np.std(TP_var))):
+                            print("TP detected at: " + str(drift_point))
+                            TP_ddm.append(drift_point)
+                            ht = ht_p
+                            TP_var.append(abs(np.mean(pred_grace_ht_p) - np.mean(pred_grace_ht)))
+                        else:
+                            print("FP detected at: " + str(drift_point))
+                            FP_ddm.append(drift_point)
+                            print(np.std(TP_var))
+
 
 
                     ht_p = None
@@ -191,8 +209,10 @@ for k in range(9, 14):
         if ht_p is not None:
             ht_p.partial_fit(X_test, y_test)
         ht.partial_fit(X_test, y_test)
+    x = h.heap()
+    mem_ddm.append(x.size)
 
-    print("Round " + str(k+1) + " out of 10 rounds")
+    print("Round " + str(k+1) + " out of 30 rounds")
     print("Actual drifts:" + str(len(actuals)))
 
     print("Number of drifts detected by ddm: " + str(d_ddm))
@@ -205,6 +225,8 @@ for k in range(9, 14):
     total_RT_ddm.append(np.mean(ddm_running_time))
     print("Mean DIST by ddm:" + str(np.mean(DIST_ddm)))
     total_DIST_ddm.append(np.mean(DIST_ddm))
+    print("Mean Memory by ddm:" + str(mem_ddm))
+    total_mean_mem.append(mem_ddm)
 
     precision = len(TP_ddm) / (len(TP_ddm) + len(FP_ddm))
     recall = len(TP_ddm) / (len(actuals) - 1)
@@ -226,30 +248,30 @@ print("Actual drifts:" + str(len(actuals) - 1))
 print("Seeds: " + str(seeds))
 
 print("Overall result for ddm:")
+
+print("D: ", str(total_D_ddm))
 print("Average Drift Detected: ", str(np.mean(total_D_ddm)))
-print("Minimum Drift Detected: ", str(np.min(total_D_ddm)))
-print("Maximum Drift Detected: ", str(np.max(total_D_ddm)))
 print("Drift Detected Standard Deviation: ", str(np.std(total_D_ddm)))
 
+print("TP: ", str(total_TP_ddm))
 print("Average TP: ", str(np.mean(total_TP_ddm)))
-print("Minimum TP: ", str(np.min(total_TP_ddm)))
-print("Maximum TP: ", str(np.max(total_TP_ddm)))
 print("TP Standard Deviation: ", str(np.std(total_TP_ddm)))
 
+print("FP: ", str(total_FP_ddm))
 print("Average FP: ", str(np.mean(total_FP_ddm)))
-print("Minimum FP: ", str(np.min(total_FP_ddm)))
-print("Maximum FP: ", str(np.max(total_FP_ddm)))
 print("FP Standard Deviation: ", str(np.std(total_FP_ddm)))
 
+print("RT: ", str(total_RT_ddm))
 print("Average RT: ", str(np.mean(total_RT_ddm)))
-print("Minimum RT: ", str(np.min(total_RT_ddm)))
-print("Maximum RT: ", str(np.max(total_RT_ddm)))
 print("RT Standard Deviation: ", str(np.std(total_RT_ddm)))
 
+print("DIST: ", str(total_DIST_ddm))
 print("Average DIST: ", str(np.mean(total_DIST_ddm)))
-print("Minimum DIST: ", str(np.min(total_DIST_ddm)))
-print("Maximum DIST: ", str(np.max(total_DIST_ddm)))
 print("DIST Standard Deviation: ", str(np.std(total_DIST_ddm)))
+
+print("MEM: ", str(total_mean_mem))
+print("Average Memory: ", str(np.mean(total_mean_mem)))
+print("Memory Standard Deviation: ", str(np.std(total_mean_mem)))
 
 print("Precisions: " + str(precisions))
 print("Average: " + str(np.mean(precisions)))

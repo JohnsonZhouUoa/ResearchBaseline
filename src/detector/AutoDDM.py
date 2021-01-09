@@ -8,10 +8,10 @@ from statsmodels.tsa.holtwinters import ExponentialSmoothing
 import pandas as pd
 
 
-class MineDDM(BaseDriftDetector):
+class AutoDDM(BaseDriftDetector):
 
     def __init__(self, min_num_instances=30, warning_level=2.0, out_control_level=3.0,
-                 default_prob=1, ts_length=20, confidence=0.95):
+                 default_prob=1, ts_length=20, confidence=0.95, tolence = 1000, c = 0.05):
         super().__init__()
         self.sample_count = 1
         self.global_ratio = 1.0
@@ -37,6 +37,8 @@ class MineDDM(BaseDriftDetector):
         self.ts_length = ts_length
         self.period = 1
         self.confidence = confidence
+        self.tolence = tolence
+        self.c = c
 
     def reset(self):
         """ reset
@@ -101,7 +103,7 @@ class MineDDM(BaseDriftDetector):
         if (self.miss_prob + self.miss_std > self.miss_prob_min + self.out_control_level * self.miss_sd_min):
             self.in_concept_change = True
             # key = min(self.actuals.keys(), key=lambda x:abs(x - n))
-            # if key != 0 and self.actuals[key] == 0 and abs(key - n) <= 1000:
+            # if key != 0 and self.actuals[key] == 0 and abs(key - n) <= self.tolence:
             #     self.drift_ts.append(n)
             #     self.detect_TP()
             # else:
@@ -133,7 +135,7 @@ class MineDDM(BaseDriftDetector):
             return self.nCk(spe, x) * self.nCk(ove - spe, n - x) / self.nCk(ove, n)
 
     def activation_function(self, pr):
-        return math.sqrt(pr) / (0.05 * self.global_ratio + math.sqrt(pr))
+        return math.sqrt(pr) / (self.c * self.global_ratio + math.sqrt(pr))
 
     def sigmoid_transformation(self, p):
         return 1/(1 + math.exp(-p))
@@ -170,8 +172,8 @@ class MineDDM(BaseDriftDetector):
                 current = i
                 for j in range(current + 2, min(self.ts_length, math.floor(current + self.ts_length / 2))):
                     if j + 1 < self.ts_length - 1:
-                        if abs(ts[j] - ts[current]) < 1000:
-                            if abs(ts[j + 1] - ts[current + 1]) < 1000:
+                        if abs(ts[j] - ts[current]) < self.tolence:
+                            if abs(ts[j + 1] - ts[current + 1]) < self.tolence:
                                 periods.append(j - current)
                                 current = j
 

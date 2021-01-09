@@ -1,4 +1,4 @@
-from src.detector.MineDDM import MineDDM
+from src.detector.AutoDDM import AutoDDM
 from src.detector.MinePH import MinePageHinkley
 from skmultiflow.drift_detection import ADWIN
 from skmultiflow.drift_detection import PageHinkley
@@ -195,7 +195,7 @@ for k in range(0, 5):
     mine_sum = []
     mine_threshold = []
 
-    mineDDM = MineDDM(actuals=actuals, initial_training=n_global)
+    mineDDM = AutoDDM(actuals=actuals, initial_training=n_global)
     while datastream.has_more_samples():
         n_global += 1
 
@@ -224,7 +224,7 @@ for k in range(0, 5):
             ht = HoeffdingTreeClassifier()
         ht.partial_fit(X_test, y_test)
 
-    print("Round " + str(k+1) + " out of 10 rounds")
+    print("Round " + str(k+1) + " out of 30 rounds")
     print("Actual drifts:" + str(len(actuals)))
 
     print("Number of drifts detected by mine: " + str(d_mine))

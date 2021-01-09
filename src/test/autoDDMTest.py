@@ -1,4 +1,4 @@
-from src.detector.MineDDM import MineDDM
+from src.detector.AutoDDM import AutoDDM
 from skika.data.reccurring_concept_stream import RCStreamType, RecurringConceptStream, conceptOccurence, RecurringConceptGradualStream
 import matplotlib.pyplot as plt
 import warnings
@@ -7,6 +7,7 @@ import numpy as np
 import random
 import collections
 from skmultiflow.trees import HoeffdingTreeClassifier, HoeffdingAdaptiveTreeClassifier, ExtremelyFastDecisionTreeClassifier
+from guppy import hpy
 
 
 
@@ -15,40 +16,22 @@ plt.style.use("seaborn-whitegrid")
 
 # Global variable
 TRAINING_SIZE = 1
-STREAM_SIZE = 10000000
+STREAM_SIZE = 6000000
 grace = 1000
-DRIFT_INTERVALS = [10000]
+tolence = 500
+DRIFT_INTERVALS = [50000]
 concepts = [0, 1, 2]
 total_D_mine = []
 total_TP_mine = []
 total_FP_mine = []
 total_RT_mine = []
 total_DIST_mine = []
-total_D_ddm = []
-total_TP_ddm = []
-total_FP_ddm = []
-total_RT_ddm = []
-total_DIST_ddm = []
-total_D_ph = []
-total_TP_ph = []
-total_FP_ph = []
-total_RT_ph = []
-total_DIST_ph = []
-total_D_minePH = []
-total_TP_minePH = []
-total_FP_minePH = []
-total_RT_minePH = []
-total_DIST_minePH = []
-total_D_adwin = []
-total_TP_adwin = []
-total_FP_adwin = []
-total_RT_adwin = []
-total_DIST_adwin = []
+total_mean_mem = []
 precisions = []
 recalls = []
 f1_scores = []
 f2_scores = []
-RANDOMNESS = 0
+RANDOMNESS = 100
 seeds = [6976, 2632, 2754, 5541, 3681, 1456, 7041, 328, 5337, 4622,
          2757, 1788, 3399, 4639, 5306, 5742, 3015, 1554, 8548, 1313,
          4738, 9458, 8145, 3624, 1913, 1654, 2988, 2031, 1802, 4338]
@@ -56,7 +39,7 @@ ignore = 0
 random.seed(6976)
 
 
-for k in range(0, 10):
+for k in range(12, 15):
     seed = seeds[k]#random.randint(0, 10000)
     keys = []
     actuals = [0]
@@ -77,7 +60,7 @@ for k in range(0, 10):
                     actuals.append(d)
                     current_concept = concept
 
-                    i2 = i + 7000
+                    i2 = i + 17000
                     keys.append(i2)
                     randomness = random.randint(0, RANDOMNESS)
                     d = i2 + ((randomness * 1) if (random.randint(0, 1) > 0) else (randomness * -1))
@@ -103,7 +86,7 @@ for k in range(0, 10):
     desc = {0: concept_0, 1:concept_1, 2:concept_2}
 
     datastream = RecurringConceptStream(
-        rctype=RCStreamType.SINE,
+        rctype=RCStreamType.RBF,
         num_samples=STREAM_SIZE,
         noise=0,
         concept_chain=concept_chain,
@@ -134,11 +117,10 @@ for k in range(0, 10):
     TP_mine = []
     FP_mine = []
     RT_mine = []
-    MEMORY_mine = []
+    mem_mine = []
     grace_end = n_global
-    DIST_mine = [0]
-    last = -1
-    retrain = False
+    detect_end = n_global
+    DIST_mine = []
     mine_pr = []
     mine_std = []
     mine_alpha = []
@@ -148,8 +130,15 @@ for k in range(0, 10):
     mine_x_mean = []
     mine_sum = []
     mine_threshold = []
+    pred_grace_ht = []
+    pred_grace_ht_p = []
+    ht_p = None
+    TP_var = []
+    wrong_pred = []
+    ML_accuracy = []
 
-    mineDDM = MineDDM()
+    mineDDM = AutoDDM()
+    h = hpy()
     while datastream.has_more_samples():
         n_global += 1
 
@@ -157,6 +146,7 @@ for k in range(0, 10):
         y_predict = ht.predict(X_test)
         mine_start_time = time.time()
         mineDDM.add_element(y_test != y_predict, n_global)
+        wrong_pred.append(y_test != y_predict)
         # mem_use = memory_usage(mineDDM.add_element(y_test != y_predict),max_usage=True)
         # print("Memory_usage:")
         # print(mem_use)
@@ -173,8 +163,8 @@ for k in range(0, 10):
                 w_mine += 1
             if mineDDM.detected_change():
                 d_mine += 1
-                drift_point = key = min(actuals, key=lambda x:abs(x - n_global))
-                if(drift_point != 0 and drift_point not in TP_mine and abs(drift_point - n_global) <= 1000):
+                drift_point = key = min(actuals, key=lambda x: abs(x - n_global))
+                if (drift_point != 0 and drift_point not in TP_mine and abs(drift_point - n_global) <= tolence):
                     print("A true positive detected at " + str(n_global))
                     DIST_mine.append(abs(n_global - drift_point))
                     TP_mine.append(drift_point)
@@ -186,8 +176,10 @@ for k in range(0, 10):
                     mineDDM.detect_FP(n_global)
                     FP_mine.append(drift_point)
         ht.partial_fit(X_test, y_test)
+    x = h.heap()
+    mem_mine.append(x.size)
 
-    print("Round " + str(k+1) + " out of 10 rounds")
+    print("Round " + str(k+1) + " out of 30 rounds")
     print("Actual drifts:" + str(len(actuals)))
 
     print("Number of drifts detected by mine: " + str(d_mine))
@@ -200,9 +192,11 @@ for k in range(0, 10):
     total_RT_mine.append(np.mean(mine_running_time))
     print("Mean DIST by mine:" + str(np.mean(DIST_mine)))
     total_DIST_mine.append(np.mean(DIST_mine))
+    print("Mean Memory by mine:" + str(mem_mine))
+    total_mean_mem.append(mem_mine)
 
-    precision = len(TP_mine) / (len(TP_mine)  + len(FP_mine))
-    recall = len(TP_mine)  / (len(actuals) - 1)
+    precision = len(TP_mine) / (len(TP_mine) + len(FP_mine))
+    recall = len(TP_mine) / (len(actuals) - 1)
     f1 = 2 * precision * recall / (precision + recall)
     f2 = 5 * precision * recall / (4 * precision + recall)
     precisions.append(precision)
@@ -234,43 +228,43 @@ print("Actual drifts:" + str(len(actuals)))
 print("Seeds: " + str(seeds))
 
 print("Overall result for mine:")
+
+print("D: ", str(total_D_mine))
 print("Average Drift Detected: ", str(np.mean(total_D_mine)))
-print("Minimum Drift Detected: ", str(np.min(total_D_mine)))
-print("Maximum Drift Detected: ", str(np.max(total_D_mine)))
 print("Drift Detected Standard Deviation: ", str(np.std(total_D_mine)))
 
+print("TP: ", str(total_TP_mine))
 print("Average TP: ", str(np.mean(total_TP_mine)))
-print("Minimum TP: ", str(np.min(total_TP_mine)))
-print("Maximum TP: ", str(np.max(total_TP_mine)))
 print("TP Standard Deviation: ", str(np.std(total_TP_mine)))
 
+print("FP: ", str(total_FP_mine))
 print("Average FP: ", str(np.mean(total_FP_mine)))
-print("Minimum FP: ", str(np.min(total_FP_mine)))
-print("Maximum FP: ", str(np.max(total_FP_mine)))
 print("FP Standard Deviation: ", str(np.std(total_FP_mine)))
 
+print("RT: ", str(total_RT_mine))
 print("Average RT: ", str(np.mean(total_RT_mine)))
-print("Minimum RT: ", str(np.min(total_RT_mine)))
-print("Maximum RT: ", str(np.max(total_RT_mine)))
 print("RT Standard Deviation: ", str(np.std(total_RT_mine)))
 
+print("DIST: ", str(total_DIST_mine))
 print("Average DIST: ", str(np.mean(total_DIST_mine)))
-print("Minimum DIST: ", str(np.min(total_DIST_mine)))
-print("Maximum DIST: ", str(np.max(total_DIST_mine)))
 print("DIST Standard Deviation: ", str(np.std(total_DIST_mine)))
 
+print("MEM: ", str(total_mean_mem))
+print("Average Memory: ", str(np.mean(total_mean_mem)))
+print("Memory Standard Deviation: ", str(np.std(total_mean_mem)))
+
 print("Precisions: " + str(precisions))
-print("Maximum: " + str(max(precisions)))
-print("Minimum: " + str(min(precisions)))
+print("Average: " + str(np.mean(precisions)))
+print("Deviation: " + str(np.std(precisions)))
 
 print("Recalls: " + str(recalls))
-print("Maximum: " + str(max(recalls)))
-print("Minimum: " + str(min(recalls)))
+print("Average: " + str(np.mean(recalls)))
+print("Deviation: " + str(np.std(recalls)))
 
 print("F1 scores: " + str(f1_scores))
-print("Maximum: " + str(max(f1_scores)))
-print("Minimum: " + str(min(f1_scores)))
+print("Average: " + str(np.mean(f1_scores)))
+print("Deviation: " + str(np.std(f1_scores)))
 
 print("F2 scores: " + str(f2_scores))
-print("Maximum: " + str(max(f2_scores)))
-print("Minimum: " + str(min(f2_scores)))
+print("Average: " + str(np.mean(f2_scores)))
+print("Deviation: " + str(np.std(f2_scores)))

@@ -1,4 +1,4 @@
-from src.detector.MineDDM import MineDDM
+from src.detector.AutoDDM import AutoDDM
 from skika.data.reccurring_concept_stream import RCStreamType, RecurringConceptStream, conceptOccurence, RecurringConceptGradualStream
 import matplotlib.pyplot as plt
 import warnings
@@ -7,6 +7,7 @@ import numpy as np
 import random
 import collections
 from skmultiflow.trees import HoeffdingTreeClassifier, HoeffdingAdaptiveTreeClassifier, ExtremelyFastDecisionTreeClassifier
+from guppy import hpy
 
 
 
@@ -15,20 +16,21 @@ plt.style.use("seaborn-whitegrid")
 
 # Global variable
 TRAINING_SIZE = 1
-STREAM_SIZE = 5000000
+STREAM_SIZE = 6000000
 grace = 1000
-DRIFT_INTERVALS = [30000]
+DRIFT_INTERVALS = [50000]
 concepts = [0, 1, 2]
 total_D_mine = []
 total_TP_mine = []
 total_FP_mine = []
 total_RT_mine = []
 total_DIST_mine = []
+total_mean_mem = []
 precisions = []
 recalls = []
 f1_scores = []
 f2_scores = []
-RANDOMNESS = 0
+RANDOMNESS = 100
 seeds = [6976, 2632, 2754, 5541, 3681, 1456, 7041, 328, 5337, 4622,
          2757, 1788, 3399, 4639, 5306, 5742, 3015, 1554, 8548, 1313,
          4738, 9458, 8145, 3624, 1913, 1654, 2988, 2031, 1802, 4338]
@@ -36,7 +38,7 @@ ignore = 0
 random.seed(6976)
 
 
-for k in range(9, 14):
+for k in range(15, 20):
     seed = seeds[k]#random.randint(0, 10000)
     keys = []
     actuals = [0]
@@ -82,8 +84,8 @@ for k in range(9, 14):
     #                              appearences=x[2], examples_per_appearence=max(DRIFT_INTERVALS))
     desc = {0: concept_0, 1:concept_1, 2:concept_2}
 
-    datastream = RecurringConceptGradualStream(
-        rctype=RCStreamType.SINE,
+    datastream = RecurringConceptStream(
+        rctype=RCStreamType.AGRAWAL,
         num_samples=STREAM_SIZE,
         noise=0,
         concept_chain=concept_chain,
@@ -114,10 +116,10 @@ for k in range(9, 14):
     TP_mine = []
     FP_mine = []
     RT_mine = []
-    MEMORY_mine = []
+    mem_mine = []
     grace_end = n_global
     detect_end = n_global
-    DIST_mine = [0]
+    DIST_mine = []
     mine_pr = []
     mine_std = []
     mine_alpha = []
@@ -132,7 +134,8 @@ for k in range(9, 14):
     ht_p = None
     TP_var = []
 
-    mineDDM = MineDDM()
+    mineDDM = AutoDDM()
+    h = hpy()
     while datastream.has_more_samples():
         n_global += 1
 
@@ -140,10 +143,6 @@ for k in range(9, 14):
         y_predict = ht.predict(X_test)
         mine_start_time = time.time()
         mineDDM.add_element(y_test != y_predict, n_global)
-        # mem_use = memory_usage(mineDDM.add_element(y_test != y_predict),max_usage=True)
-        # print("Memory_usage:")
-        # print(mem_use)
-
         mine_running_time = time.time() - mine_start_time
         RT_mine.append(mine_running_time)
         # mine_pr.append(mineDDM.get_pr())
@@ -157,29 +156,31 @@ for k in range(9, 14):
                     drift_point = detect_end - 2 * grace
                     print("Accuracy of ht: " + str(np.mean(pred_grace_ht)))
                     print("Accuracy of ht_p: " + str(np.mean(pred_grace_ht_p)))
-                    # if (len(TP_var) == 0):
-                    if (np.mean(pred_grace_ht_p) > np.mean(pred_grace_ht)):
-                        print("TP detected at: " + str(drift_point))
-                        TP_mine.append(drift_point)
-                        ht = ht_p
-                        mineDDM.detect_TP(n_global)
-                        TP_var.append(abs(np.mean(pred_grace_ht_p) - np.mean(pred_grace_ht)))
+                    if (len(TP_var) == 0):
+                        if (np.mean(pred_grace_ht_p) > np.mean(pred_grace_ht)):
+                            print("TP detected at: " + str(drift_point))
+                            drift_actual = min(actuals, key=lambda x: abs(x - drift_point))
+                            DIST_mine.append(abs(drift_actual - drift_point))
+                            TP_mine.append(drift_point)
+                            ht = ht_p
+                            mineDDM.detect_TP(n_global)
+                            TP_var.append(abs(np.mean(pred_grace_ht_p) - np.mean(pred_grace_ht)))
+                        else:
+                            print("FP detected at: " + str(drift_point))
+                            FP_mine.append(drift_point)
                     else:
-                        print("FP detected at: " + str(drift_point))
-                        FP_mine.append(drift_point)
-                    # else:
-                    #     if ((np.mean(pred_grace_ht_p) <= np.mean(pred_grace_ht))
-                    #             or (abs(np.mean(pred_grace_ht_p) - np.mean(pred_grace_ht)) <= np.std(TP_var))):
-                    #         print("FP detected at: " + str(drift_point))
-                    #         FP_mine.append(drift_point)
-                    #         print(np.std(TP_var))
-                    #
-                    #     else:
-                    #         print("TP detected at: " + str(drift_point))
-                    #         TP_mine.append(drift_point)
-                    #         ht = ht_p
-                    #         mineDDM.detect_TP(n_global)
-                    #         TP_var.append(abs(np.mean(pred_grace_ht_p) - np.mean(pred_grace_ht)))
+                        if (np.mean(pred_grace_ht_p) > np.mean(pred_grace_ht) or (
+                                abs(np.mean(pred_grace_ht_p) - np.mean(pred_grace_ht)) <= np.std(TP_var))):
+                            print("TP detected at: " + str(drift_point))
+                            TP_mine.append(drift_point)
+                            ht = ht_p
+                            mineDDM.detect_TP(n_global)
+                            TP_var.append(abs(np.mean(pred_grace_ht_p) - np.mean(pred_grace_ht)))
+                        else:
+                            print("FP detected at: " + str(drift_point))
+                            FP_mine.append(drift_point)
+                            print(np.std(TP_var))
+
 
                     ht_p = None
                     pred_grace_ht = []
@@ -198,8 +199,10 @@ for k in range(9, 14):
         if ht_p is not None:
             ht_p.partial_fit(X_test, y_test)
         ht.partial_fit(X_test, y_test)
+    x = h.heap()
+    mem_mine.append(x.size)
 
-    print("Round " + str(k+1) + " out of 10 rounds")
+    print("Round " + str(k+1) + " out of 30 rounds")
     print("Actual drifts:" + str(len(actuals)))
 
     print("Number of drifts detected by mine: " + str(d_mine))
@@ -212,6 +215,8 @@ for k in range(9, 14):
     total_RT_mine.append(np.mean(mine_running_time))
     print("Mean DIST by mine:" + str(np.mean(DIST_mine)))
     total_DIST_mine.append(np.mean(DIST_mine))
+    print("Mean Memory by mine:" + str(mem_mine))
+    total_mean_mem.append(mem_mine)
 
     precision = len(TP_mine) / (len(TP_mine) + len(FP_mine))
     recall = len(TP_mine) / (len(actuals) - 1)
@@ -246,30 +251,30 @@ print("Actual drifts:" + str(len(actuals)))
 print("Seeds: " + str(seeds))
 
 print("Overall result for mine:")
+
+print("D: ", str(total_D_mine))
 print("Average Drift Detected: ", str(np.mean(total_D_mine)))
-print("Minimum Drift Detected: ", str(np.min(total_D_mine)))
-print("Maximum Drift Detected: ", str(np.max(total_D_mine)))
 print("Drift Detected Standard Deviation: ", str(np.std(total_D_mine)))
 
+print("TP: ", str(total_TP_mine))
 print("Average TP: ", str(np.mean(total_TP_mine)))
-print("Minimum TP: ", str(np.min(total_TP_mine)))
-print("Maximum TP: ", str(np.max(total_TP_mine)))
 print("TP Standard Deviation: ", str(np.std(total_TP_mine)))
 
+print("FP: ", str(total_FP_mine))
 print("Average FP: ", str(np.mean(total_FP_mine)))
-print("Minimum FP: ", str(np.min(total_FP_mine)))
-print("Maximum FP: ", str(np.max(total_FP_mine)))
 print("FP Standard Deviation: ", str(np.std(total_FP_mine)))
 
+print("RT: ", str(total_RT_mine))
 print("Average RT: ", str(np.mean(total_RT_mine)))
-print("Minimum RT: ", str(np.min(total_RT_mine)))
-print("Maximum RT: ", str(np.max(total_RT_mine)))
 print("RT Standard Deviation: ", str(np.std(total_RT_mine)))
 
+print("DIST: ", str(total_DIST_mine))
 print("Average DIST: ", str(np.mean(total_DIST_mine)))
-print("Minimum DIST: ", str(np.min(total_DIST_mine)))
-print("Maximum DIST: ", str(np.max(total_DIST_mine)))
 print("DIST Standard Deviation: ", str(np.std(total_DIST_mine)))
+
+print("MEM: ", str(total_mean_mem))
+print("Average Memory: ", str(np.mean(total_mean_mem)))
+print("Memory Standard Deviation: ", str(np.std(total_mean_mem)))
 
 print("Precisions: " + str(precisions))
 print("Average: " + str(np.mean(precisions)))
