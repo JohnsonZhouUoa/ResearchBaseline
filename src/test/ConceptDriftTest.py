@@ -61,7 +61,7 @@ ignore = 0
 random.seed(6976)
 
 
-for k in range(0, 30):
+for k in range(len(seeds)):
     seed = seeds[k]#random.randint(0, 10000)
 
     data = arff.load('/hdd2/SINE_1NOISE/SINE' + str(seed) + '.arff')

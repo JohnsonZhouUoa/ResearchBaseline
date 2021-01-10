@@ -44,7 +44,7 @@ ignore = 0
 random.seed(6976)
 
 
-for k in range(15, 20):
+for k in range(len(seeds)):
     seed = seeds[k]#random.randint(0, 10000)
     #seeds.append(seed)
     keys = []
