@@ -24,7 +24,7 @@ plt.style.use("seaborn-whitegrid")
 TRAINING_SIZE = 1
 STREAM_SIZE = 6000000
 grace = 1000
-tolence = 500
+tolence = 600
 DRIFT_INTERVALS = [50000]
 concepts = [0, 1, 2]
 total_D_ddm = []
@@ -45,7 +45,7 @@ ignore = 0
 random.seed(6976)
 
 
-for k in range(12, 15):
+for k in range(len(seeds)):
     seed = seeds[k]#random.randint(0, 10000)
     #seeds.append(seed)
     keys = []
